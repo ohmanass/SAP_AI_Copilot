@@ -11,8 +11,12 @@ L'application fonctionne en local et se déploie sur **SAP BTP (Cloud Foundry)**
 ### Agent IA
 
 - GPT-4o-mini via SAP Generative AI Hub (SDK `sap-ai-sdk-gen`)
-- Tool Calling avec quatre outils : consultation d'une commande d'achat (postes, échéances, quantités ouvertes), analyse des retards de livraison, recherche de commandes par fournisseur ou par date, recherche dans la documentation
-- Données transactionnelles lues dans **SAP S/4HANA Cloud** via l'API officielle `API_PURCHASEORDER_2` (OData V4), ou dans une base SQLite de démonstration utilisable hors ligne
+- Tool Calling avec sept outils :
+  - **Achats (MM)** : consultation d'une commande d'achat (postes, échéances, quantités ouvertes), analyse des retards de livraison, recherche par fournisseur ou par date
+  - **Ventes (SD)** : consultation d'une commande client (client, statuts, postes, dates confirmées), recherche par client ou par date, commandes clients en retard de livraison
+  - **Documentation** : recherche RAG
+- Données transactionnelles lues dans **SAP S/4HANA Cloud** via les API officielles `API_PURCHASEORDER_2` et `API_SALESORDER` (OData V4), ou dans une base SQLite de démonstration (achats uniquement) utilisable hors ligne
+- **Espaces de travail par module** (MM, SD, ABAP) : l'agent n'utilise que les outils et la documentation du module choisi
 - RAG sur ChromaDB avec les embeddings `text-embedding-3-large`
 - Réponses fondées sur les données et les documents récupérés, avec citation des sources
 
@@ -22,7 +26,8 @@ L'application fonctionne en local et se déploie sur **SAP BTP (Cloud Foundry)**
 - Chat : envoi avec Entrée, retour à la ligne avec Shift + Entrée, indicateur de génération, rendu Markdown, copie des réponses, gestion des erreurs avec bouton « Réessayer »
 - Sources RAG affichées sous chaque réponse, avec l'extrait réellement récupéré dans ChromaDB et sa distance vectorielle
 - Outils utilisés par l'agent affichés pour chaque réponse
-- Historique persistant : nouvelle conversation, liste, reprise, suppression. Le contexte de l'agent est restauré après un redémarrage du backend
+- Page **Modules** : un espace de travail par module SAP, avec un statut réel (connecté, documentation, prévu), ses outils, sa documentation et ses suggestions
+- Historique persistant : nouvelle conversation, liste, reprise, renommage, suppression. Chaque conversation garde son module. Le contexte de l'agent est restauré après un redémarrage du backend
 - Page **Knowledge Base** : documents indexés, nombre de chunks indexés et attendus, statut d'indexation
 - Page **Settings** : statut en direct du backend, de l'IA (avec test de connexion), de la base vectorielle et des données SAP
 - Thème sombre bleu nuit basé sur `sap_horizon_dark`, responsive desktop et tablette
@@ -151,7 +156,9 @@ Les outils transactionnels lisent les commandes d'achat via l'API officielle **P
 | Postes (article, quantité, prix) | `_PurchaseOrderItem` |
 | Dates de livraison et quantités ouvertes | `_PurchaseOrderScheduleLineTP` / `PurchaseOrderScheduleLine` |
 
-Une commande est considérée **en retard** lorsqu'une échéance a une date de livraison dépassée et une quantité encore ouverte (`OpenPurchaseOrderQuantity > 0`). OData V4 impose de filtrer une quantité avec son unité : les unités contrôlées sont configurables (`SAP_QUANTITY_UNITS`, par défaut `PC,EA`). Sur un système de cette taille, l'analyse porte sur une fenêtre de temps récente, et l'agent indique toujours la fenêtre et les totaux.
+Les commandes clients (module SD) sont lues via l'API **Sales Order (OData V4)**, service `API_SALESORDER`, avec la même clé : en-tête (`SalesOrder`), client (`_Partner`, fonction partenaire `AG`), postes (`_Item`) et échéances (`_ScheduleLine`). Une commande client est **en retard** lorsque sa date de livraison demandée est dépassée et qu'elle n'est pas entièrement livrée (`OverallDeliveryStatus` A ou B). L'API ne permettant pas de filtrer sur le nom du client, ce nom est d'abord résolu en numéro de client à partir des commandes récentes.
+
+Une commande d'achat est considérée **en retard** lorsqu'une échéance a une date de livraison dépassée et une quantité encore ouverte (`OpenPurchaseOrderQuantity > 0`). OData V4 impose de filtrer une quantité avec son unité : les unités contrôlées sont configurables (`SAP_QUANTITY_UNITS`, par défaut `PC,EA`). Sur un système de cette taille, l'analyse porte sur une fenêtre de temps récente, et l'agent indique toujours la fenêtre et les totaux.
 
 ### Configuration
 
@@ -302,7 +309,8 @@ Les documents de `data/documents` servent de base documentaire au RAG.
 
 ## Pistes d'évolution
 
-- Onglet **Modules** : un espace de travail par module SAP (MM, SD, FI), avec ses outils, sa documentation et ses suggestions
+- Module **FI** : factures fournisseurs et rapprochement commande / réception / facture
+- Documentation RAG propre au module SD
 - Affichage des données SAP sous forme de tableaux Fiori
 - Import et ré-indexation de documents depuis l'interface
 - Historique persistant sur SAP BTP (SAP HANA Cloud ou PostgreSQL)

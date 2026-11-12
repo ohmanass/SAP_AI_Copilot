@@ -11,6 +11,9 @@ sap.ui.define([
 		get_purchase_order: "sap-icon://sales-document",
 		get_overdue_orders: "sap-icon://shipping-status",
 		search_purchase_orders: "sap-icon://search",
+		get_sales_order: "sap-icon://sales-order",
+		search_sales_orders: "sap-icon://customer-order-entry",
+		get_late_sales_orders: "sap-icon://past",
 		search_sap_documentation: "sap-icon://course-book"
 	};
 
@@ -99,7 +102,7 @@ sap.ui.define([
 			const info = component.getModuleInfo(key) ||
 				(await component.refreshModules(), component.getModuleInfo(key));
 
-			if (!info || info.status === "planned") {
+			if (!info || info.status === "planned" || info.status === "unavailable") {
 				MessageToast.show(this.getText("modulesLoadError"));
 				this.getRouter().navTo("modules", {}, true);
 				return;

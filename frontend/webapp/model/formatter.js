@@ -25,7 +25,13 @@ sap.ui.define([
 		},
 
 		moduleStatusState(status) {
-			return { connected: "Success", demo: "Information", documentation: "Information", planned: "None" }[status] || "None";
+			return {
+				connected: "Success",
+				demo: "Information",
+				documentation: "Information",
+				unavailable: "Warning",
+				planned: "None"
+			}[status] || "None";
 		},
 
 		relativeTime(value) {

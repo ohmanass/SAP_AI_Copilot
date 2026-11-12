@@ -9,6 +9,9 @@ Statuses describe what really exists, never more:
   connected      transactional tools + documentation
   documentation  RAG on module documents only
   planned        roadmap entry, not usable yet
+Computed at runtime (system_info.get_modules):
+  demo           connected module running on the local demo dataset
+  unavailable    module that needs SAP S/4HANA while the demo dataset is configured
 """
 
 from dataclasses import dataclass, field
@@ -29,6 +32,8 @@ class Module:
     apis: tuple = ()
     instructions: str = ""
     suggestions: tuple = field(default_factory=tuple)
+    # True when the module has no local demo data and needs SAP S/4HANA (SAP_DATA_SOURCE=odata)
+    requires_s4hana: bool = False
 
 
 MODULES = (
@@ -46,7 +51,9 @@ MODULES = (
             "You are working in the SAP MM (Materials Management) workspace. "
             "Focus on procurement: purchase orders, suppliers, delivery schedules, "
             "open quantities and goods receipt. Use the purchase order tools for "
-            "transactional questions and the documentation for MM concepts."
+            "transactional questions and the documentation for MM concepts. "
+            "Customer sales orders belong to the SD workspace: if the user asks "
+            "about them, do not call any tool, say so and suggest the SD workspace."
         ),
         suggestions=(
             ("Show overdue purchase orders.", "Delivery analysis", "sap-icon://shipping-status"),
@@ -84,9 +91,28 @@ MODULES = (
         key="sd",
         code="SD",
         name="Sales and Distribution",
-        description="Sales orders, deliveries and billing. Planned: S/4HANA Sales Order API.",
-        status="planned",
-        icon="sap-icon://sales-order"
+        description="Customer sales orders: customers, items, delivery status and late deliveries.",
+        status="connected",
+        icon="sap-icon://sales-order",
+        tools=("get_sales_order", "search_sales_orders", "get_late_sales_orders"),
+        apis=("API_SALESORDER (OData V4)",),
+        instructions=(
+            "You are working in the SAP SD (Sales and Distribution) workspace. "
+            "Focus on customer sales orders: customers, items, requested and "
+            "confirmed delivery dates, delivery and processing status. "
+            "Use the sales order tools for every factual answer. There is no SD "
+            "documentation in this workspace: for SAP concepts, answer briefly "
+            "and say it is general knowledge, not retrieved documentation. "
+            "Purchase orders and suppliers belong to the MM workspace: if the user "
+            "asks about them, do not call any tool, say so and suggest the MM workspace."
+        ),
+        suggestions=(
+            ("Show late sales orders.", "Late deliveries", "sap-icon://past"),
+            ("Analyse sales order 538239.", "Sales order lookup", "sap-icon://sales-order"),
+            ("Find the latest sales orders for US Large Cycles 2.", "Sales order search", "sap-icon://search"),
+            ("List this month's sales orders for LA Specialty Cycles 3.", "Sales order search", "sap-icon://calendar")
+        ),
+        requires_s4hana=True
     ),
     Module(
         key="fi",
@@ -104,7 +130,13 @@ _BY_KEY = {module.key: module for module in MODULES}
 def get_module(key):
     """Usable module for a key, or None (general workspace)."""
     module = _BY_KEY.get((key or "").strip().lower())
-    return module if module and module.status != "planned" else None
+    if not module or module.status == "planned":
+        return None
+    if module.requires_s4hana:
+        from app.sap_data import get_data_source
+        if get_data_source().key != "odata":
+            return None
+    return module
 
 
 def describe_modules(indexed_chunks_by_source: dict):
@@ -126,6 +158,7 @@ def describe_modules(indexed_chunks_by_source: dict):
                 for source in module.doc_sources
             ],
             "indexed_chunks": sum(indexed_chunks_by_source.get(s, 0) for s in module.doc_sources),
+            "requires_s4hana": module.requires_s4hana,
             "suggestions": [
                 {"text": text, "hint": hint, "icon": icon}
                 for text, hint, icon in module.suggestions

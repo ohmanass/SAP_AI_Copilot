@@ -80,8 +80,12 @@ def get_modules():
     for module in modules:
         if module["status"] == "connected":
             # Transactional modules read the configured SAP data source
-            module["data_source"] = source.label
-            if source.key != "odata":
+            if source.key == "odata":
+                module["data_source"] = source.label
+            elif module["requires_s4hana"]:
+                module["status"] = "unavailable"
+            else:
+                module["data_source"] = source.label
                 module["status"] = "demo"
     return modules
 

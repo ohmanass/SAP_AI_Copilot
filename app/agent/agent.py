@@ -2,9 +2,12 @@ import json
 
 from app.llm.llm_client import LLMClient
 from app.tools.sap_data_tools import (
+    get_late_sales_orders,
     get_overdue_orders,
     get_purchase_order,
-    search_purchase_orders
+    get_sales_order,
+    search_purchase_orders,
+    search_sales_orders
 )
 from app.tools.sap_documentation import search_sap_documentation
 
@@ -97,6 +100,89 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_sales_order",
+            "description": (
+                "Retrieve a customer sales order (SAP SD) with its customer, "
+                "sales organization, delivery and processing status, items "
+                "and confirmed delivery dates."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sales_order": {
+                        "type": "string",
+                        "description": "SAP sales order number"
+                    }
+                },
+                "required": ["sales_order"],
+                "additionalProperties": False
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_sales_orders",
+            "description": (
+                "Search customer sales orders (SAP SD) by customer (name or "
+                "customer ID) and/or order date range. Returns the most recent "
+                "matches and the total number of matching orders."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "customer": {
+                        "type": "string",
+                        "description": "Customer name (partial match) or customer ID."
+                    },
+                    "date_from": {
+                        "type": "string",
+                        "description": "Earliest order date, format YYYY-MM-DD."
+                    },
+                    "date_to": {
+                        "type": "string",
+                        "description": "Latest order date, format YYYY-MM-DD."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of orders to return (default 10, max 50)."
+                    }
+                },
+                "required": [],
+                "additionalProperties": False
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_late_sales_orders",
+            "description": (
+                "Retrieve customer sales orders whose requested delivery date "
+                "has passed while they are not (or only partially) delivered. "
+                "Results cover a recent time window and are limited; the "
+                "response states the window and totals."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "days_back": {
+                        "type": "integer",
+                        "description": "Only consider requested delivery dates within this many past days (default 30)."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of sales orders to return (default 10, max 50)."
+                    }
+                },
+                "required": [],
+                "additionalProperties": False
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "search_sap_documentation",
             "description": """
             Search the SAP technical documentation for information
@@ -134,6 +220,9 @@ TOOL_REGISTRY = {
     "get_purchase_order": get_purchase_order,
     "get_overdue_orders": get_overdue_orders,
     "search_purchase_orders": search_purchase_orders,
+    "get_sales_order": get_sales_order,
+    "search_sales_orders": search_sales_orders,
+    "get_late_sales_orders": get_late_sales_orders,
     "search_sap_documentation": search_sap_documentation
 }
 
@@ -169,21 +258,30 @@ class SAPAgent:
                     - SAP Fiori
                     - SAP BTP
 
-                    You have access to four tools:
+                    You have access to these tools:
 
-                    1. get_purchase_order:
-                    Retrieves a purchase order with its items, delivery dates
-                    and open quantities.
+                    Purchasing (SAP MM):
+                    - get_purchase_order: a purchase order with its items,
+                    delivery dates and open quantities.
+                    - get_overdue_orders: overdue purchase orders (past
+                    delivery date, quantity still open).
+                    - search_purchase_orders: purchase orders by supplier
+                    and/or order date.
 
-                    2. get_overdue_orders:
-                    Retrieves overdue purchase orders (past delivery date,
-                    quantity still open).
+                    Sales (SAP SD):
+                    - get_sales_order: a customer sales order with its customer,
+                    statuses, items and confirmed delivery dates.
+                    - search_sales_orders: sales orders by customer and/or
+                    order date.
+                    - get_late_sales_orders: sales orders past their requested
+                    delivery date and not fully delivered.
 
-                    3. search_purchase_orders:
-                    Finds purchase orders by supplier and/or order date.
+                    Documentation:
+                    - search_sap_documentation: searches the SAP technical
+                    documentation using RAG.
 
-                    4. search_sap_documentation:
-                    Searches the SAP technical documentation using RAG.
+                    Purchase orders (suppliers) and sales orders (customers)
+                    are different documents: never mix them up.
 
                     Transactional tool results include a "source" field naming
                     the system the data comes from (an SAP S/4HANA Cloud system

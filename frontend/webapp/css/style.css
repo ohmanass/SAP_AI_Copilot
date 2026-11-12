@@ -246,6 +246,15 @@ html, body.cpBody {
 	height: auto !important;
 }
 
+/* Only the history scrolls: every other sidebar block keeps its natural height */
+.cpSidebar > :not(.cpHistoryScroll) {
+	flex: 0 0 auto;
+}
+
+.cpNav.sapTntNL {
+	overflow: visible;
+}
+
 .cpHistory .sapMListUl {
 	display: flex;
 	flex-direction: column;

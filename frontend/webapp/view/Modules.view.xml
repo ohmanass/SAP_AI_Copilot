@@ -47,7 +47,7 @@
 
 						<Text text="{app>description}" class="cpCardText"/>
 
-						<VBox class="cpModuleFacts" renderType="Bare" visible="{= ${app>status} !== 'planned' }">
+						<VBox class="cpModuleFacts" renderType="Bare" visible="{= ${app>status} !== 'planned' &amp;&amp; ${app>status} !== 'unavailable' }">
 							<HBox class="cpRow" renderType="Bare">
 								<Text text="{i18n>moduleTools}" class="cpRowLabel"/>
 								<Text text="{path: 'app>tools', formatter: '.formatTools'}" class="cpRowValue"/>
@@ -68,10 +68,10 @@
 
 						<HBox class="cpModuleActions" renderType="Bare">
 							<Button
-								text="{= ${app>status} === 'planned' ? ${i18n>modulePlanned} : ${i18n>moduleOpen} }"
-								icon="{= ${app>status} === 'planned' ? 'sap-icon://pending' : 'sap-icon://navigation-right-arrow' }"
+								text="{= ${app>status} === 'planned' ? ${i18n>modulePlanned} : (${app>status} === 'unavailable' ? ${i18n>moduleUnavailable} : ${i18n>moduleOpen}) }"
+								icon="{= ${app>status} === 'planned' || ${app>status} === 'unavailable' ? 'sap-icon://pending' : 'sap-icon://navigation-right-arrow' }"
 								iconFirst="false"
-								enabled="{= ${app>status} !== 'planned' }"
+								enabled="{= ${app>status} !== 'planned' &amp;&amp; ${app>status} !== 'unavailable' }"
 								class="cpModuleOpen"
 								press=".onOpenModule"/>
 						</HBox>
