@@ -6,7 +6,6 @@
     Deletes, by exact name only:
       apps      sap-ai-copilot-approuter, sap-ai-copilot-backend (with their routes)
       services  sap-ai-copilot-xsuaa, sap-ai-copilot-aicore, sap-ai-copilot-s4
-      the network policy between the two apps
 
 .PARAMETER Force
     Skip the confirmation prompt.
@@ -28,8 +27,6 @@ if (-not $Force) {
     $answer = Read-Host "`nType 'delete' to confirm"
     if ($answer -ne "delete") { Write-Host "Cancelled."; return }
 }
-
-cf remove-network-policy $Apps[0] $Apps[1] --protocol tcp --port 8080
 
 foreach ($app in $Apps) {
     cf delete $app -f -r

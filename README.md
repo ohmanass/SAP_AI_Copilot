@@ -2,6 +2,8 @@
 
 Assistant IA pour SAP MM et le développement ABAP, construit sur **SAP Generative AI Hub** (SAP AI Core). Il combine un agent à **Tool Calling** qui interroge les commandes d'achat d'un système **SAP S/4HANA Cloud via OData V4**, un pipeline **RAG** sur une documentation technique SAP et une interface **SAPUI5** inspirée de SAP Fiori.
 
+L'application fonctionne en local et se déploie sur **SAP BTP (Cloud Foundry)** derrière l'**Application Router**, avec connexion SAP (XSUAA).
+
 ![Interface de conversation](docs/screenshots/conversation.png)
 
 ## Fonctionnalités
@@ -25,6 +27,13 @@ Assistant IA pour SAP MM et le développement ABAP, construit sur **SAP Generati
 - Page **Settings** : statut en direct du backend, de l'IA (avec test de connexion), de la base vectorielle et des données SAP
 - Thème sombre bleu nuit basé sur `sap_horizon_dark`, responsive desktop et tablette
 
+### Déploiement SAP BTP
+
+- Application Router : connexion SAP obligatoire (XSUAA), hébergement de l'application SAPUI5, relais de `/api` vers le backend
+- Backend protégé par jeton : chaque appel à l'API exige un jeton XSUAA valide, vérifié avec la librairie officielle `sap-xssec`
+- Profil de l'utilisateur SAP connecté affiché dans la barre latérale
+- Script de déploiement idempotent et script de suppression, sans secret dans le code
+
 | Accueil | Sources RAG |
 | --- | --- |
 | ![Accueil](docs/screenshots/accueil.png) | ![Sources RAG](docs/screenshots/sources-rag.png) |
@@ -36,10 +45,13 @@ Assistant IA pour SAP MM et le développement ABAP, construit sur **SAP Generati
 ## Architecture
 
 ```text
-Frontend SAPUI5 (UI5 Tooling, port 8080)
-        │  HTTP / REST (JSON)
+Frontend SAPUI5
+        │  HTTP / REST (JSON), chemin relatif /api
         ▼
-Backend FastAPI (port 8000)
+Local : proxy de ui5 serve (port 8080)   │   SAP BTP : Application Router + XSUAA
+        │                                            │  jeton de l'utilisateur transmis
+        ▼                                            ▼
+Backend FastAPI (local : port 8000 ; BTP : jeton XSUAA exigé)
         │
         ▼
 Agent SAP (Tool Calling)
@@ -55,6 +67,8 @@ Agent SAP (Tool Calling)
 SAP_AI_Copilot/
 ├── app/
 │   ├── api.py              # API FastAPI
+│   ├── auth.py             # Validation du jeton XSUAA (actif sur BTP uniquement)
+│   ├── cloud_env.py        # Lecture des services liés Cloud Foundry (VCAP_SERVICES)
 │   ├── system_info.py      # Statut des services et inventaire de la Knowledge Base
 │   ├── agent/agent.py      # Agent à Tool Calling
 │   ├── llm/                # Client SAP Generative AI Hub
@@ -64,8 +78,15 @@ SAP_AI_Copilot/
 │   ├── database/           # Schéma et jeu de données SQLite
 │   └── storage/            # Persistance de l'historique des conversations
 ├── data/documents/         # Documentation indexée par le RAG
+├── deploy/
+│   ├── approuter/          # Application Router (package.json, xs-app.json)
+│   ├── manifest.yml        # Applications Cloud Foundry
+│   ├── xs-security.json    # Configuration XSUAA
+│   ├── deploy.ps1          # Build et déploiement sur SAP BTP
+│   └── cleanup.ps1         # Suppression des ressources déployées
 ├── frontend/
-│   ├── ui5.yaml            # UI5 Tooling (SAPUI5 1.136 LTS)
+│   ├── ui5.yaml            # UI5 Tooling (SAPUI5 1.136 LTS) + proxy /api local
+│   ├── lib/apiProxy.js     # Proxy de développement vers le backend
 │   └── webapp/
 │       ├── controller/     # App, Chat, KnowledgeBase, Settings
 │       ├── view/           # Vues XML
@@ -179,7 +200,7 @@ npm install
 npm start
 ```
 
-L'application s'ouvre sur `http://localhost:8080/index.html`.
+L'application s'ouvre sur `http://localhost:8080/index.html`. Le serveur de développement relaie `/api` vers `http://127.0.0.1:8000` (modifiable avec la variable `API_PROXY_TARGET`), comme l'Application Router le fait sur SAP BTP.
 
 > Sous Windows, si PowerShell bloque `npm` (politique d'exécution), utiliser `npm.cmd`.
 
@@ -192,13 +213,85 @@ L'application s'ouvre sur `http://localhost:8080/index.html`.
 | `npm run build` | Build de production dans `frontend/dist` |
 | `python -m app.main` | Version en ligne de commande de l'agent |
 
+## Déploiement sur SAP BTP
+
+```text
+Navigateur
+   │  HTTPS
+   ▼
+sap-ai-copilot-approuter   (Node.js, Application Router)
+   │  connexion SAP via XSUAA, sert l'application SAPUI5 (SAPUI5 chargé depuis le CDN SAP)
+   │  /api/*  ─►  jeton de l'utilisateur transmis (forwardAuthToken)
+   ▼
+sap-ai-copilot-backend     (Python, FastAPI)
+   │  refuse tout appel sans jeton XSUAA valide (401), sauf /api/health
+   ├── sap-ai-copilot-aicore  ─►  SAP Generative AI Hub
+   ├── sap-ai-copilot-s4      ─►  SAP S/4HANA Cloud (OData V4)
+   └── ChromaDB               ─►  index RAG embarqué au déploiement
+```
+
+| Ressource Cloud Foundry | Type | Rôle |
+| --- | --- | --- |
+| `sap-ai-copilot-approuter` | Application Node.js, 256 Mo | Connexion, interface SAPUI5, relais `/api` |
+| `sap-ai-copilot-backend` | Application Python, 1 Go | API FastAPI, agent, RAG |
+| `sap-ai-copilot-xsuaa` | Service `xsuaa` / `application` | Authentification des utilisateurs |
+| `sap-ai-copilot-aicore` | Service user-provided | Identifiants SAP AI Core |
+| `sap-ai-copilot-s4` | Service user-provided | Clé API S/4HANA |
+
+### Prérequis BTP
+
+- Un sous-compte SAP BTP avec l'environnement Cloud Foundry, un space et le rôle **Space Developer**
+- Le service **xsuaa** (plan `application`) disponible dans le sous-compte
+- La CLI Cloud Foundry v8 (`winget install CloudFoundry.CLI.v8`)
+- Un `.env` complet (identifiants AI Core et clé S/4HANA) et l'index RAG construit (`python -m app.rag.index_documents`)
+
+### Déployer
+
+```powershell
+cf login -a https://api.cf.<région>.hana.ondemand.com --sso
+.\deploy\deploy.ps1
+```
+
+Le script :
+
+1. construit le dossier `deploy/build` (non versionné) : code du backend sans les tests, index RAG, dépendances Python figées sur les versions testées en local, build SAPUI5 ;
+2. crée ou met à jour les trois services. Les secrets sont lus dans `.env` et transmis à Cloud Foundry par des fichiers temporaires, jamais en ligne de commande ;
+3. déploie le backend puis l'Application Router ;
+4. vérifie la sécurité : le backend doit répondre **401** à un appel sans jeton, sinon le script échoue ;
+5. affiche l'URL de l'application.
+
+Le script peut être relancé pour publier une nouvelle version. Il ne crée ou ne modifie que les ressources dont le nom commence par `sap-ai-copilot-`.
+
+### Vérifier
+
+- `cf apps` : les deux applications sont `started`, avec 1/1 instance
+- L'URL de l'application demande une connexion SAP, puis affiche le nom de l'utilisateur dans la barre latérale
+- La page **Settings** indique un backend en ligne, une IA joignable et la source de données S/4HANA
+- En cas de problème : `cf logs sap-ai-copilot-backend --recent`
+
+### Supprimer
+
+```powershell
+.\deploy\cleanup.ps1
+```
+
+Supprime les deux applications (avec leurs routes) et les trois services, par leur nom exact, après confirmation.
+
+### Points d'attention
+
+- **Historique des conversations** : le disque d'une application Cloud Foundry est effacé à chaque redémarrage. Sur BTP, l'historique est donc temporaire. Une base gérée (SAP HANA Cloud ou PostgreSQL) le rendrait persistant.
+- **Secrets** : les services user-provided sont lisibles par les membres du space ayant le rôle Space Developer (`cf env`). Le Destination service et une liaison directe à une instance SAP AI Core sont les alternatives à privilégier en production.
+- **Région** : le domaine `cfapps.eu10-005.hana.ondemand.com` est indiqué dans `deploy/manifest.yml` et `deploy/xs-security.json`. Il faut l'adapter pour une autre région.
+- **Pourquoi un jeton plutôt qu'une route interne** : rendre le backend accessible uniquement depuis l'Application Router via une règle réseau demande le droit `network.write`, rarement accordé aux développeurs. La validation du jeton XSUAA protège l'API de la même façon, sans droit particulier.
+
 ## Sécurité
 
-- Les identifiants SAP AI Core et la clé API S/4HANA restent côté serveur dans `.env`, exclu du dépôt.
+- Les identifiants SAP AI Core et la clé API S/4HANA restent côté serveur : dans `.env` en local (exclu du dépôt), dans des services Cloud Foundry sur BTP.
+- Sur BTP, toute l'application exige une connexion SAP (XSUAA) et l'API vérifie le jeton de chaque appel.
+- Les requêtes qui modifient des données (`POST`, `DELETE`) sont protégées par un jeton CSRF via l'Application Router.
 - L'accès à S/4HANA est en lecture seule (requêtes GET uniquement).
 - Le navigateur ne reçoit que des noms de modèles, des compteurs et des indicateurs de statut.
 - Les réponses du modèle sont échappées avant le rendu Markdown, puis nettoyées par le sanitizer HTML de SAPUI5.
-- CORS limité à `localhost:8080`.
 
 ## Données
 
@@ -209,10 +302,12 @@ Les documents de `data/documents` servent de base documentaire au RAG.
 
 ## Pistes d'évolution
 
+- Onglet **Modules** : un espace de travail par module SAP (MM, SD, FI), avec ses outils, sa documentation et ses suggestions
 - Affichage des données SAP sous forme de tableaux Fiori
 - Import et ré-indexation de documents depuis l'interface
-- Déploiement sur SAP BTP (Cloud Foundry, XSUAA, Destination service à la place de la clé API)
+- Historique persistant sur SAP BTP (SAP HANA Cloud ou PostgreSQL)
+- Destination service pour la connexion S/4HANA, à la place de la clé API
 
 ## Stack technique
 
-SAPUI5 1.136 · UI5 Tooling 4 · FastAPI · SAP Generative AI Hub · SAP AI SDK · SAP S/4HANA Cloud OData V4 · ChromaDB · SQLite · Python 3.12
+SAPUI5 1.136 · UI5 Tooling 4 · FastAPI · SAP Generative AI Hub · SAP AI SDK · SAP S/4HANA Cloud OData V4 · SAP BTP Cloud Foundry · Application Router · XSUAA · ChromaDB · SQLite · Python 3.12

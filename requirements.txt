@@ -5,3 +5,4 @@ chromadb
 fastapi
 uvicorn[standard]
 httpx
+sap-xssec

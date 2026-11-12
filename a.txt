@@ -1,0 +1,10 @@
+Sécurisation du backend sur BTP et documentation du déploiement
+
+- Validation du jeton XSUAA (sap-xssec) sur toutes les routes /api,
+  sauf /api/health ; inactive en local
+- Backend lié au service XSUAA, avec une route publique stable
+  (remplace la route interne et la règle réseau, non autorisées dans l'org)
+- Passage des applications sur la pile cflinuxfs5
+- Vérification automatique en fin de déploiement : 401 attendu sans jeton
+- README : section « Déploiement sur SAP BTP » (architecture, prérequis,
+  déploiement, vérification, suppression, points d'attention)

@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app import system_info
+from app import auth, system_info
 from app.agent.agent import SAPAgent
 from app.storage import chat_store
 
@@ -35,6 +35,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
+
+# On SAP BTP: every /api call (except /api/health) needs a valid XSUAA token
+auth.install(app)
 
 chat_store.initialize()
 

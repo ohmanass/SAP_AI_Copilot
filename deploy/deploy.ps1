@@ -13,7 +13,7 @@
       2. Services: sap-ai-copilot-xsuaa (xsuaa/application),
                    sap-ai-copilot-aicore, sap-ai-copilot-s4 (user-provided)
       3. cf push backend then approuter
-      4. Network policy approuter -> backend (backend has no public route)
+      4. Security check: the backend must answer 401 without an XSUAA token
 
 .PARAMETER BuildOnly
     Only build deploy/build, do not touch Cloud Foundry.
@@ -75,6 +75,21 @@ function Test-ServiceExists($name) {
         $ErrorActionPreference = $previous
     }
     return $LASTEXITCODE -eq 0
+}
+
+function Get-AppRoutes($name) {
+    # Routes of an app, empty when the app does not exist yet
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = cf app $name 2>&1 | ForEach-Object { "$_" }
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+    if ($LASTEXITCODE -ne 0) { return @() }
+    $line = $output | Select-String '^routes:\s+(.+)$' | Select-Object -First 1
+    if (-not $line) { return @() }
+    return $line.Matches[0].Groups[1].Value -split ',\s*' | Where-Object { $_ }
 }
 
 function Get-ServiceStatus($name) {
@@ -217,20 +232,43 @@ Set-UserProvidedService $S4 @{ api_key = $envValues["SAP_API_KEY"] }
 # ---------------------------------------------------------------------------
 $Manifest = Join-Path $DeployDir "manifest.yml"
 
-Step "Push $Backend"
-Invoke-Native "cf push $Backend" { cf push $Backend -f $Manifest --var "genai_model=$GenAiModel" }
+# Stable public host name for the backend: reuse the existing one, else generate one
+$BackendHost = Get-AppRoutes $Backend |
+    Where-Object { $_ -match '^(sap-ai-copilot-backend-[a-z0-9]+)\.cfapps\.' } |
+    ForEach-Object { $Matches[1] } | Select-Object -First 1
+if (-not $BackendHost) {
+    $suffix = -join ((97..122) + (48..57) | Get-Random -Count 8 | ForEach-Object { [char]$_ })
+    $BackendHost = "sap-ai-copilot-backend-$suffix"
+}
+$PushVars = @("--var", "genai_model=$GenAiModel", "--var", "backend_host=$BackendHost")
+
+Step "Push $Backend ($BackendHost)"
+Invoke-Native "cf push $Backend" { cf push $Backend -f $Manifest @PushVars }
+
+# The first deployment used an internal route + network policy (needs network.write,
+# not granted in this org). Remove that route if it is still mapped.
+if ((Get-AppRoutes $Backend) -contains "$Backend.apps.internal") {
+    Step "Removing obsolete internal route"
+    Invoke-Native "cf unmap-route" { cf unmap-route $Backend apps.internal --hostname $Backend }
+    Invoke-Native "cf delete-route" { cf delete-route apps.internal --hostname $Backend -f }
+}
 
 Step "Push $Approuter"
-Invoke-Native "cf push $Approuter" { cf push $Approuter -f $Manifest --var "genai_model=$GenAiModel" }
+Invoke-Native "cf push $Approuter" { cf push $Approuter -f $Manifest @PushVars }
 
 # ---------------------------------------------------------------------------
-# 5. Network policy: only the approuter can reach the backend
+# 5. Security check: the backend must refuse calls without a token
 # ---------------------------------------------------------------------------
-Step "Network policy $Approuter -> $Backend"
-Invoke-Native "cf add-network-policy" { cf add-network-policy $Approuter $Backend --protocol tcp --port 8080 }
+Step "Security check"
+$backendUrl = "https://$BackendHost.cfapps.eu10-005.hana.ondemand.com"
+$health = curl.exe -s -o NUL -w "%{http_code}" "$backendUrl/api/health"
+$status = curl.exe -s -o NUL -w "%{http_code}" "$backendUrl/api/status"
+Write-Host "   /api/health without token: HTTP $health (expected 200)"
+Write-Host "   /api/status without token: HTTP $status (expected 401)"
+if ($status -ne "401") { throw "Security check failed: the backend answered $status without a token" }
 
 # ---------------------------------------------------------------------------
 # Done
 # ---------------------------------------------------------------------------
-$route = (cf app $Approuter | Select-String 'routes:\s+(\S+)' | Select-Object -First 1).Matches.Groups[1].Value
+$route = Get-AppRoutes $Approuter | Select-Object -First 1
 Write-Host "`nSAP AI Copilot is deployed: https://$route" -ForegroundColor Green
