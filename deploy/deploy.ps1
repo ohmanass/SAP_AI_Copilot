@@ -185,6 +185,21 @@ $html = $html.Replace('src="resources/sap-ui-core.js"', "src=`"https://ui5.sap.c
 if ($html -notmatch "ui5.sap.com/$Ui5Version") { throw "Could not switch the UI5 bootstrap to the CDN" }
 [IO.File]::WriteAllText($index, $html)
 
+# Cache busting: the stylesheet name carries a hash of its content, so no browser
+# or proxy cache can serve an outdated version after a deployment.
+$webappBuild = Join-Path $ApprouterBuild "webapp"
+$cssFile = Join-Path $webappBuild "css\style.css"
+$cssHash = (Get-FileHash $cssFile -Algorithm SHA256).Hash.Substring(0, 10).ToLower()
+$cssName = "style.$cssHash.css"
+Rename-Item $cssFile $cssName
+foreach ($file in "manifest.json", "Component-preload.js") {
+    $path = Join-Path $webappBuild $file
+    $content = [IO.File]::ReadAllText($path)
+    if (-not $content.Contains('"css/style.css"')) { throw "css/style.css reference not found in $file" }
+    [IO.File]::WriteAllText($path, $content.Replace('"css/style.css"', "`"css/$cssName`""), (New-Object Text.UTF8Encoding $false))
+}
+Write-Host "Stylesheet: css/$cssName"
+
 Copy-Item (Join-Path $DeployDir "approuter\package.json"), (Join-Path $DeployDir "approuter\xs-app.json") $ApprouterBuild
 
 Write-Host "Build ready in $BuildDir"
