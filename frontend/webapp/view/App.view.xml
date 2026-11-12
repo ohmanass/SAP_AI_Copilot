@@ -79,10 +79,10 @@
 					</ScrollContainer>
 
 					<HBox class="cpProfile" alignItems="Center" renderType="Bare">
-						<Avatar initials="LU" displaySize="XS" backgroundColor="Accent6" class="cpProfileAvatar"/>
+						<Avatar initials="{= ${app>/user} ? ${app>/user/initials} : 'LU' }" displaySize="XS" backgroundColor="Accent6" class="cpProfileAvatar"/>
 						<VBox class="cpProfileText" renderType="Bare">
-							<Text text="{i18n>profileName}" class="cpProfileName"/>
-							<Text text="{i18n>profileSubtitle}" class="cpProfileMeta"/>
+							<Text text="{= ${app>/user} ? ${app>/user/name} : ${i18n>profileName} }" wrapping="false" class="cpProfileName"/>
+							<Text text="{= ${app>/user} ? ${app>/user/email} : ${i18n>profileSubtitle} }" wrapping="false" class="cpProfileMeta" tooltip="{app>/user/email}"/>
 						</VBox>
 						<HBox class="cpStatusDot" renderType="Bare" tooltip="{path: 'app>/backend/state', formatter: '.formatter.backendStateText'}">
 							<customData>

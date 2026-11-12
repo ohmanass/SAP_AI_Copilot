@@ -1,4 +1,7 @@
 
+# Must run first: maps SAP BTP service bindings to environment variables
+from app import cloud_env  # noqa: F401
+
 import json
 import logging
 import threading

@@ -22,8 +22,51 @@ sap.ui.define([
 			this._chatTimeoutMs = settings.chatTimeoutMs;
 		},
 
+		/** Absolute API address, for display. */
 		getBaseUrl() {
-			return this._baseUrl;
+			return new URL(this._baseUrl, document.baseURI).href;
+		},
+
+		/**
+		 * fetch() with the CSRF token required by the SAP Application Router for
+		 * modifying requests. Locally (no approuter) no token is issued and the
+		 * header is simply omitted.
+		 */
+		async _fetch(url, init) {
+			const method = (init.method || "GET").toUpperCase();
+			if (method === "GET" || method === "HEAD") {
+				return fetch(url, init);
+			}
+
+			const send = async () => {
+				const token = await this._csrfToken();
+				const headers = Object.assign({}, init.headers, token ? { "X-CSRF-Token": token } : {});
+				return fetch(url, Object.assign({}, init, { headers }));
+			};
+
+			let response = await send();
+			if (response.status === 403 && (response.headers.get("x-csrf-token") || "").toLowerCase() === "required") {
+				this._csrfPromise = null; // token expired with the session: fetch a new one once
+				response = await send();
+			}
+			return response;
+		},
+
+		_csrfToken() {
+			if (!this._csrfPromise) {
+				this._csrfPromise = fetch(`${this._baseUrl}health`, { headers: { "X-CSRF-Token": "Fetch" } })
+					.then((response) => response.headers.get("x-csrf-token"))
+					.catch(() => null);
+			}
+			return this._csrfPromise;
+		},
+
+		/** The approuter answers with its login page (HTML) when the session has expired. */
+		_checkSession(response) {
+			const type = response.headers.get("content-type") || "";
+			if (response.ok && type.includes("text/html")) {
+				throw this._error("session", "Session expired");
+			}
 		},
 
 		health() {
@@ -67,12 +110,14 @@ sap.ui.define([
 
 			try {
 				resetIdleTimer();
-				const response = await fetch(`${this._baseUrl}chat/stream`, {
+				const response = await this._fetch(`${this._baseUrl}chat/stream`, {
 					method: "POST",
 					headers: { "Content-Type": "application/json", Accept: "application/x-ndjson" },
 					body: JSON.stringify({ message, session_id: sessionId || null }),
 					signal: controller.signal
 				});
+
+				this._checkSession(response);
 
 				if (!response.ok) {
 					const payload = await response.json().catch(() => null);
@@ -158,12 +203,14 @@ sap.ui.define([
 
 			let response;
 			try {
-				response = await fetch(this._baseUrl + path, init);
+				response = await this._fetch(this._baseUrl + path, init);
 			} catch (cause) {
 				throw this._error(cause.name === "AbortError" ? "timeout" : "network", cause.message);
 			} finally {
 				clearTimeout(timer);
 			}
+
+			this._checkSession(response);
 
 			const payload = await response.json().catch(() => null);
 

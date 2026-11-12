@@ -14,3 +14,15 @@ framework:
 server:
   settings:
     httpPort: 8080
+  customMiddleware:
+    # Forwards /api/* to the local FastAPI backend (the approuter does this on SAP BTP)
+    - name: copilot-api-proxy
+      beforeMiddleware: compression
+---
+specVersion: "4.0"
+kind: extension
+type: server-middleware
+metadata:
+  name: copilot-api-proxy
+middleware:
+  path: lib/apiProxy.js

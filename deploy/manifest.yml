@@ -1,0 +1,48 @@
+# Cloud Foundry manifest for SAP AI Copilot.
+# Used by deploy/deploy.ps1, which builds the "build/" folder first.
+---
+applications:
+
+  # FastAPI backend: internal route only, reachable from the approuter alone
+  - name: sap-ai-copilot-backend
+    path: build/backend
+    buildpacks:
+      - python_buildpack
+    stack: cflinuxfs4
+    memory: 1G
+    disk_quota: 3G
+    instances: 1
+    command: python -m uvicorn app.api:app --host 0.0.0.0 --port $PORT
+    routes:
+      - route: sap-ai-copilot-backend.apps.internal
+    health-check-type: http
+    health-check-http-endpoint: /api/health
+    timeout: 180
+    env:
+      SAP_DATA_SOURCE: odata
+      GENAI_MODEL_NAME: ((genai_model))
+    services:
+      - sap-ai-copilot-aicore
+      - sap-ai-copilot-s4
+
+  # Application Router: public URL, SAP login (XSUAA), serves the SAPUI5 app, proxies /api
+  - name: sap-ai-copilot-approuter
+    path: build/approuter
+    buildpacks:
+      - nodejs_buildpack
+    stack: cflinuxfs4
+    memory: 256M
+    disk_quota: 512M
+    instances: 1
+    random-route: true
+    services:
+      - sap-ai-copilot-xsuaa
+    env:
+      SESSION_TIMEOUT: 30
+      destinations: >
+        [{
+          "name": "copilot-backend",
+          "url": "http://sap-ai-copilot-backend.apps.internal:8080",
+          "forwardAuthToken": true,
+          "timeout": 300000
+        }]

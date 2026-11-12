@@ -1,0 +1,15 @@
+{
+  "name": "sap-ai-copilot-approuter",
+  "version": "1.0.0",
+  "description": "SAP Application Router for SAP AI Copilot: XSUAA login, SAPUI5 app hosting, /api routing",
+  "private": true,
+  "engines": {
+    "node": "^22.0.0"
+  },
+  "scripts": {
+    "start": "node node_modules/@sap/approuter/approuter.js"
+  },
+  "dependencies": {
+    "@sap/approuter": "23.3.0"
+  }
+}
