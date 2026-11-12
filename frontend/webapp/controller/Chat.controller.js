@@ -26,7 +26,9 @@ sap.ui.define([
 				sessionId: null,
 				title: this.getText("newConversationTitle"),
 				messages: [],
+				busy: false,
 				pending: false,
+				activity: "",
 				loading: false,
 				draft: "",
 				suggestions: this._buildSuggestions()
@@ -76,8 +78,18 @@ sap.ui.define([
 			this._loadConversation(sessionId);
 		},
 
+		/** Leaves the conversation being displayed (a running request keeps going server-side). */
+		_detachStream() {
+			this._cancelReveal();
+			this._stream = null;
+			const chat = this._chat();
+			chat.setProperty("/busy", false);
+			chat.setProperty("/activity", "");
+		},
+
 		_startNewConversation() {
 			this._conversationKey++;
+			this._detachStream();
 			const chat = this._chat();
 			chat.setProperty("/sessionId", null);
 			chat.setProperty("/title", this.getText("newConversationTitle"));
@@ -90,6 +102,7 @@ sap.ui.define([
 
 		async _loadConversation(sessionId) {
 			const key = ++this._conversationKey;
+			this._detachStream();
 			const chat = this._chat();
 
 			chat.setProperty("/sessionId", sessionId);
@@ -143,6 +156,9 @@ sap.ui.define([
 
 		onRetry(event) {
 			const failed = event.getSource().getBindingContext("chat").getObject();
+			if (this._chat().getProperty("/busy")) {
+				return;
+			}
 			const messages = this._chat().getProperty("/messages");
 			const index = messages.indexOf(failed);
 
@@ -151,52 +167,239 @@ sap.ui.define([
 			this._send(failed.failedText);
 		},
 
+		onSendOrStop() {
+			if (this._chat().getProperty("/busy")) {
+				this.onStop();
+			} else {
+				this.onSend();
+			}
+		},
+
+		onStop() {
+			const stream = this._stream;
+			if (!stream) {
+				return;
+			}
+			if (stream.done) {
+				// Answer already complete and saved: just finish the reveal now
+				stream.shown = stream.received.length;
+			} else if (this._abortController) {
+				this._abortController.abort();
+			}
+		},
+
+		/**
+		 * Sends a message through the streaming endpoint (falls back to /api/chat
+		 * when the backend does not provide it). Events update the UI live:
+		 * tool activity, then the answer text revealed progressively.
+		 */
 		async _send(text) {
 			const chat = this._chat();
 
-			if (!text || chat.getProperty("/pending") || chat.getProperty("/loading")) {
+			if (!text || chat.getProperty("/busy") || chat.getProperty("/loading")) {
 				return;
 			}
 
-			const key = this._conversationKey;
-			const sessionId = chat.getProperty("/sessionId");
+			const stream = {
+				key: this._conversationKey,
+				text,
+				sessionId: chat.getProperty("/sessionId"),
+				index: -1,
+				received: "",
+				shown: 0,
+				done: null
+			};
+			this._stream = stream;
+			this._abortController = new AbortController();
 
 			this._append({ role: "user", content: text });
 			chat.setProperty("/draft", "");
+			chat.setProperty("/busy", true);
 			chat.setProperty("/pending", true);
+			chat.setProperty("/activity", this.getText("thinking"));
+
+			const onEvent = (event) => this._onStreamEvent(stream, event);
 
 			try {
-				const result = await this.getService().chat(text, sessionId);
-
-				if (key !== this._conversationKey) {
-					// The user moved to another conversation; the backend saved it anyway
-					return;
+				try {
+					await this.getService().chatStream(text, stream.sessionId, onEvent, this._abortController.signal);
+				} catch (error) {
+					if (error.kind !== "http" || ![404, 405].includes(error.status)) {
+						throw error;
+					}
+					// Older backend without /api/chat/stream
+					const result = await this.getService().chat(text, stream.sessionId);
+					onEvent({ type: "token", content: result.response });
+					onEvent(Object.assign({ type: "done" }, result));
 				}
 
-				this._append(this._toMessage({
-					role: "assistant",
-					content: result.response,
-					sources: result.sources,
-					tools_used: result.tools_used
-				}));
-
-				if (!sessionId) {
-					chat.setProperty("/sessionId", result.session_id);
-					chat.setProperty("/title", this._buildTitle(text));
-					this.getModel("app").setProperty("/activeSessionId", result.session_id);
-					this.getRouter().navTo("conversation", { sessionId: result.session_id }, true);
+				if (!stream.done) {
+					throw Object.assign(new Error("Stream ended without an answer"), { kind: "stream" });
 				}
 			} catch (error) {
-				if (key === this._conversationKey) {
+				if (stream.key !== this._conversationKey) {
+					return;
+				}
+				this._cancelReveal();
+				if (error.kind === "aborted") {
+					this._markStopped(stream);
+				} else {
+					if (stream.index >= 0) {
+						this._chat().setProperty(`/messages/${stream.index}/streaming`, false);
+					}
 					this._append(this._errorMessage(this.describeError(error), text));
+					this._endBusy();
 				}
 			} finally {
-				if (key === this._conversationKey) {
-					chat.setProperty("/pending", false);
-					this._focusInput();
-				}
+				this._abortController = null;
 				this.getOwnerComponent().refreshConversations();
 			}
+		},
+
+		_onStreamEvent(stream, event) {
+			if (stream.key !== this._conversationKey) {
+				return; // the user switched conversation; the backend still saves the exchange
+			}
+			const chat = this._chat();
+
+			switch (event.type) {
+				case "tool_start":
+					chat.setProperty("/activity", this._activityLabel(event.name));
+					break;
+				case "tool_end":
+					// Keep the finished step readable: local tools complete in milliseconds
+					chat.setProperty("/activity",
+						`${this._activityLabel(event.name)} ${event.success ? "✓" : "✕"}  ·  ${this.getText("activityWriting")}`);
+					break;
+				case "token":
+					stream.received += event.content;
+					this._ensureStreamMessage(stream);
+					this._startReveal(stream);
+					break;
+				case "done":
+					stream.done = event;
+					stream.received = event.response; // authoritative full text
+					this._ensureStreamMessage(stream);
+					this._startReveal(stream);
+					break;
+				default:
+					break;
+			}
+		},
+
+		_ensureStreamMessage(stream) {
+			if (stream.index >= 0) {
+				return;
+			}
+			const chat = this._chat();
+			chat.setProperty("/pending", false);
+			this._append({ role: "assistant", content: "", streaming: true });
+			stream.index = chat.getProperty("/messages").length - 1;
+		},
+
+		/** Progressive reveal of text already received (Gen AI Hub delivers it in bursts). */
+		_startReveal(stream) {
+			if (this._revealFrame) {
+				return;
+			}
+			const step = () => {
+				if (stream.key !== this._conversationKey) {
+					this._revealFrame = null;
+					return;
+				}
+				const remaining = stream.received.length - stream.shown;
+				if (remaining > 0) {
+					stream.shown += Math.max(4, Math.ceil(remaining * 0.07));
+					stream.shown = Math.min(stream.shown, stream.received.length);
+					this._renderStream(stream);
+				}
+				if (stream.done && stream.shown >= stream.received.length) {
+					this._revealFrame = null;
+					this._finalize(stream);
+					return;
+				}
+				this._revealFrame = requestAnimationFrame(step);
+			};
+			this._revealFrame = requestAnimationFrame(step);
+		},
+
+		_cancelReveal() {
+			if (this._revealFrame) {
+				cancelAnimationFrame(this._revealFrame);
+				this._revealFrame = null;
+			}
+		},
+
+		_renderStream(stream) {
+			const followBottom = this._isNearBottom();
+			const text = stream.received.slice(0, stream.shown);
+			const path = `/messages/${stream.index}`;
+			this._chat().setProperty(`${path}/content`, text);
+			this._chat().setProperty(`${path}/html`, Markdown.render(text));
+			if (followBottom) {
+				this._scrollToBottom();
+			}
+		},
+
+		_finalize(stream) {
+			const chat = this._chat();
+			const done = stream.done;
+			const followBottom = this._isNearBottom();
+
+			chat.setProperty(`/messages/${stream.index}`, this._toMessage({
+				role: "assistant",
+				content: done.response,
+				sources: done.sources,
+				tools_used: done.tools_used
+			}));
+
+			if (!stream.sessionId) {
+				chat.setProperty("/sessionId", done.session_id);
+				chat.setProperty("/title", this._buildTitle(stream.text));
+				this.getModel("app").setProperty("/activeSessionId", done.session_id);
+				this.getRouter().navTo("conversation", { sessionId: done.session_id }, true);
+			}
+
+			this._endBusy();
+			this.getOwnerComponent().refreshConversations();
+			if (followBottom) {
+				this._scrollToBottom();
+			}
+		},
+
+		_markStopped(stream) {
+			const chat = this._chat();
+			if (stream.index < 0) {
+				this._ensureStreamMessage(stream);
+			}
+			const path = `/messages/${stream.index}`;
+			const text = stream.received.slice(0, stream.shown);
+			chat.setProperty(`${path}/content`, text);
+			chat.setProperty(`${path}/html`, text ? Markdown.render(text) : "");
+			chat.setProperty(`${path}/streaming`, false);
+			chat.setProperty(`${path}/stopped`, true);
+			this._endBusy();
+		},
+
+		_endBusy() {
+			const chat = this._chat();
+			chat.setProperty("/busy", false);
+			chat.setProperty("/pending", false);
+			chat.setProperty("/activity", "");
+			this._stream = null;
+			this._focusInput();
+		},
+
+		_activityLabel(toolName) {
+			const key = `activity.${toolName}`;
+			const bundle = this.getOwnerComponent().getModel("i18n").getResourceBundle();
+			return bundle.hasText(key) ? bundle.getText(key) : this.getText("thinking");
+		},
+
+		_isNearBottom() {
+			const scroller = this.byId("scroller");
+			const domRef = scroller && scroller.getDomRef();
+			return !domRef || domRef.scrollHeight - domRef.scrollTop - domRef.clientHeight < 120;
 		},
 
 		_onInputKeyDown(event) {
@@ -246,7 +449,14 @@ sap.ui.define([
 		},
 
 		_normalise(message) {
-			return Object.assign({ tools: [], sources: [], html: "", time: new Date().toISOString() }, message);
+			return Object.assign({
+				tools: [],
+				sources: [],
+				html: "",
+				streaming: false,
+				stopped: false,
+				time: new Date().toISOString()
+			}, message);
 		},
 
 		_toMessage(raw) {

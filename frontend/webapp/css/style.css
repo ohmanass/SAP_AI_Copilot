@@ -443,7 +443,6 @@ html, body.cpBody {
 	flex: 1 1 auto;
 	min-height: 0;
 	height: auto !important;
-	scroll-behavior: smooth;
 }
 
 .cpColumn {
@@ -789,6 +788,25 @@ html, body.cpBody {
 	border-bottom: none;
 }
 
+/* Cursor while the answer is being revealed */
+.cpMessage[data-streaming="true"] .cpMarkdown > :last-child::after {
+	content: "";
+	display: inline-block;
+	width: 0.5rem;
+	height: 1.05em;
+	margin-left: 0.2rem;
+	vertical-align: text-bottom;
+	border-radius: 2px;
+	background: var(--cp-cyan);
+	animation: cpCaret 1s steps(1) infinite;
+}
+
+@keyframes cpCaret {
+	50% {
+		opacity: 0;
+	}
+}
+
 /* Tools & sources */
 .cpTools {
 	display: flex;
@@ -956,6 +974,7 @@ html, body.cpBody {
 }
 
 .cpInput.sapMFocus::before,
+.cpInput .sapMInputBaseContentWrapper::before,
 .cpInput .sapMInputBaseContentWrapper::after,
 .cpInput.sapMFocus .sapMInputBaseContentWrapper::after {
 	display: none !important;
@@ -1011,6 +1030,12 @@ html, body.cpBody {
 .cpSend .sapMBtnInner .sapMBtnIcon {
 	color: #ffffff;
 	margin: 0;
+}
+
+.cpSend[data-busy="true"] .sapMBtnInner,
+.cpSend[data-busy="true"] .sapMBtnInner.sapMBtnHoverable:hover {
+	background: var(--cp-surface-2);
+	box-shadow: inset 0 0 0 1px var(--cp-border-strong);
 }
 
 .cpSend.sapMBtnDisabled .sapMBtnInner {

@@ -88,6 +88,8 @@ TOOL_REGISTRY = {
     "search_sap_documentation": search_sap_documentation
 }
 
+MAX_ROUNDS_MESSAGE = "Maximum number of tool-calling rounds reached."
+
 
 class SAPAgent:
 
@@ -283,43 +285,179 @@ class SAPAgent:
 
             # Execute each requested tool
             for call in tool_calls:
+                self._execute_call(
+                    call.id,
+                    call.function.name,
+                    call.function.arguments,
+                    tools_used,
+                    sources
+                )
 
-                tool_name = call.function.name
+        return MAX_ROUNDS_MESSAGE
 
-                if tool_name not in tools_used:
-                    tools_used.append(tool_name)
+    def _execute_call(self, call_id, tool_name, raw_arguments, tools_used, sources):
+        """Run one tool call, record it and append its result to the conversation."""
 
-                try:
-                    arguments = json.loads(
-                        call.function.arguments
-                    )
+        if tool_name not in tools_used:
+            tools_used.append(tool_name)
 
-                    result = self.execute_tool(
-                        tool_name,
-                        arguments
-                    )
+        try:
+            arguments = json.loads(raw_arguments or "{}")
 
-                    self._collect_sources(tool_name, result, sources)
+            result = self.execute_tool(
+                tool_name,
+                arguments
+            )
 
-                    tool_result = {
-                        "success": True,
-                        "data": result
+            self._collect_sources(tool_name, result, sources)
+
+            tool_result = {
+                "success": True,
+                "data": result
+            }
+
+        except Exception as error:
+
+            tool_result = {
+                "success": False,
+                "error": str(error)
+            }
+
+        self.messages.append({
+            "role": "tool",
+            "tool_call_id": call_id,
+            "content": json.dumps(
+                tool_result,
+                ensure_ascii=False
+            )
+        })
+
+        return tool_result["success"]
+
+    # ------------------------------------------------------------------
+    # Streaming
+    # ------------------------------------------------------------------
+
+    def ask_stream(self, user_input):
+        """
+        Streaming variant of ask_with_details(). Yields events:
+
+            {"type": "tool_start", "name": str}
+            {"type": "tool_end", "name": str, "success": bool}
+            {"type": "token", "content": str}
+            {"type": "done", "response": str, "tools_used": [...], "sources": [...]}
+
+        If the generator fails or is closed early (client disconnected),
+        the conversation is rolled back to its previous state.
+        """
+
+        history_length = len(self.messages)
+        tools_used = []
+        sources = []
+        completed = False
+
+        try:
+            self.messages.append({
+                "role": "user",
+                "content": user_input
+            })
+
+            for _ in range(5):
+
+                content_parts = []
+                calls = {}
+
+                stream = self.llm.generate_completion(
+                    messages=self.messages,
+                    tools=TOOLS,
+                    stream=True
+                )
+
+                for chunk in stream:
+
+                    # Content-filter chunks carry no choices
+                    if not chunk.choices:
+                        continue
+
+                    delta = chunk.choices[0].delta
+
+                    if delta.content:
+                        content_parts.append(delta.content)
+                        yield {"type": "token", "content": delta.content}
+
+                    # Tool calls arrive as fragments, grouped by index
+                    for fragment in delta.tool_calls or []:
+                        call = calls.setdefault(
+                            fragment.index,
+                            {"id": None, "name": "", "arguments": ""}
+                        )
+                        if fragment.id:
+                            call["id"] = fragment.id
+                        if fragment.function and fragment.function.name:
+                            call["name"] += fragment.function.name
+                        if fragment.function and fragment.function.arguments:
+                            call["arguments"] += fragment.function.arguments
+
+                content = "".join(content_parts)
+
+                if not calls:
+                    self.messages.append({
+                        "role": "assistant",
+                        "content": content
+                    })
+                    completed = True
+                    yield {
+                        "type": "done",
+                        "response": content,
+                        "tools_used": tools_used,
+                        "sources": sources
                     }
+                    return
 
-                except Exception as error:
-
-                    tool_result = {
-                        "success": False,
-                        "error": str(error)
-                    }
+                ordered_calls = [calls[index] for index in sorted(calls)]
 
                 self.messages.append({
-                    "role": "tool",
-                    "tool_call_id": call.id,
-                    "content": json.dumps(
-                        tool_result,
-                        ensure_ascii=False
-                    )
+                    "role": "assistant",
+                    "content": content or None,
+                    "tool_calls": [
+                        {
+                            "id": call["id"],
+                            "type": "function",
+                            "function": {
+                                "name": call["name"],
+                                "arguments": call["arguments"]
+                            }
+                        }
+                        for call in ordered_calls
+                    ]
                 })
 
-        return "Maximum number of tool-calling rounds reached."
+                for call in ordered_calls:
+                    yield {"type": "tool_start", "name": call["name"]}
+
+                    success = self._execute_call(
+                        call["id"],
+                        call["name"],
+                        call["arguments"],
+                        tools_used,
+                        sources
+                    )
+
+                    yield {"type": "tool_end", "name": call["name"], "success": success}
+
+            self.messages.append({
+                "role": "assistant",
+                "content": MAX_ROUNDS_MESSAGE
+            })
+            completed = True
+            yield {
+                "type": "done",
+                "response": MAX_ROUNDS_MESSAGE,
+                "tools_used": tools_used,
+                "sources": sources
+            }
+
+        finally:
+            # Error or early close (GeneratorExit): keep the history consistent
+            if not completed:
+                del self.messages[history_length:]

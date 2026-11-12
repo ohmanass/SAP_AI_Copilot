@@ -62,6 +62,7 @@
 								<HBox class="cpMessage" renderType="Bare">
 									<customData>
 										<core:CustomData key="role" value="{chat>role}" writeToDom="true"/>
+										<core:CustomData key="streaming" value="{= ${chat>streaming} ? 'true' : 'false' }" writeToDom="true"/>
 									</customData>
 
 									<Image src="img/logo.svg" width="2rem" height="2rem" decorative="true" class="cpMsgAvatar" visible="{= ${chat>role} !== 'user' }"/>
@@ -71,7 +72,14 @@
 
 										<Text text="{chat>content}" renderWhitespace="true" class="cpUserBubble" visible="{= ${chat>role} === 'user' }"/>
 
-										<core:HTML content="{chat>html}" sanitizeContent="true" preferDOM="false" visible="{= ${chat>role} === 'assistant' }"/>
+										<core:HTML content="{chat>html}" sanitizeContent="true" preferDOM="false" visible="{= ${chat>role} === 'assistant' &amp;&amp; !!${chat>html} }"/>
+
+										<MessageStrip
+											visible="{chat>stopped}"
+											type="Information"
+											showIcon="true"
+											text="{i18n>generationStopped}"
+											class="cpErrorStrip"/>
 
 										<MessageStrip
 											visible="{= ${chat>role} === 'error' }"
@@ -106,14 +114,14 @@
 											</HBox>
 										</VBox>
 
-										<HBox class="cpMsgFooter" alignItems="Center" renderType="Bare" visible="{= ${chat>role} !== 'error' }">
+										<HBox class="cpMsgFooter" alignItems="Center" renderType="Bare" visible="{= ${chat>role} !== 'error' &amp;&amp; !${chat>streaming} }">
 											<Text text="{path: 'chat>time', formatter: '.formatter.messageTime'}" class="cpMsgTime"/>
 											<Button
 												icon="sap-icon://copy"
 												type="Transparent"
 												class="cpIconBtn"
 												tooltip="{i18n>copy}"
-												visible="{= ${chat>role} === 'assistant' }"
+												visible="{= ${chat>role} === 'assistant' &amp;&amp; !!${chat>content} }"
 												press=".onCopy"/>
 										</HBox>
 									</VBox>
@@ -129,7 +137,7 @@
 							<Image src="img/logo.svg" width="2rem" height="2rem" decorative="true" class="cpMsgAvatar"/>
 							<HBox class="cpTyping" alignItems="Center" renderType="Bare">
 								<core:HTML content="&lt;span class=&quot;cpDots&quot; aria-hidden=&quot;true&quot;&gt;&lt;i&gt;&lt;/i&gt;&lt;i&gt;&lt;/i&gt;&lt;i&gt;&lt;/i&gt;&lt;/span&gt;"/>
-								<Text text="{i18n>thinking}" class="cpTypingText"/>
+								<Text text="{chat>/activity}" class="cpTypingText"/>
 							</HBox>
 						</HBox>
 					</VBox>
@@ -151,12 +159,16 @@
 							maxLength="8000"/>
 						<Button
 							id="sendButton"
-							icon="sap-icon://paper-plane"
+							icon="{= ${chat>/busy} ? 'sap-icon://stop' : 'sap-icon://paper-plane' }"
 							type="Emphasized"
 							class="cpSend"
-							tooltip="{i18n>send}"
-							enabled="{= !${chat>/pending} &amp;&amp; !${chat>/loading} &amp;&amp; !!${chat>/draft} }"
-							press=".onSend"/>
+							tooltip="{= ${chat>/busy} ? ${i18n>stop} : ${i18n>send} }"
+							enabled="{= ${chat>/busy} || (!${chat>/loading} &amp;&amp; !!${chat>/draft}) }"
+							press=".onSendOrStop">
+							<customData>
+								<core:CustomData key="busy" value="{= ${chat>/busy} ? 'true' : 'false' }" writeToDom="true"/>
+							</customData>
+						</Button>
 					</HBox>
 					<HBox class="cpComposerMeta" renderType="Bare">
 						<Text text="{i18n>composerHint}" class="cpComposerHint"/>

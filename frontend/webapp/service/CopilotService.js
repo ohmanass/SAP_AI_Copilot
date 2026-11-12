@@ -44,6 +44,86 @@ sap.ui.define([
 			});
 		},
 
+		/**
+		 * Streaming chat (NDJSON). Calls onEvent for every event received.
+		 * Rejects with kind "aborted" when the caller aborts through `signal`,
+		 * "timeout" when the backend stays silent too long, "stream" on a server-side error.
+		 */
+		async chatStream(message, sessionId, onEvent, signal) {
+			const controller = new AbortController();
+			let timedOut = false;
+			let idleTimer;
+			const resetIdleTimer = () => {
+				clearTimeout(idleTimer);
+				idleTimer = setTimeout(() => {
+					timedOut = true;
+					controller.abort();
+				}, this._chatTimeoutMs);
+			};
+			const forwardAbort = () => controller.abort();
+			if (signal) {
+				signal.addEventListener("abort", forwardAbort);
+			}
+
+			try {
+				resetIdleTimer();
+				const response = await fetch(`${this._baseUrl}chat/stream`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json", Accept: "application/x-ndjson" },
+					body: JSON.stringify({ message, session_id: sessionId || null }),
+					signal: controller.signal
+				});
+
+				if (!response.ok) {
+					const payload = await response.json().catch(() => null);
+					const error = this._error("http", (payload && payload.detail) || response.statusText);
+					error.status = response.status;
+					error.detail = payload && typeof payload.detail === "string" ? payload.detail : "";
+					throw error;
+				}
+
+				const reader = response.body.getReader();
+				const decoder = new TextDecoder();
+				let buffer = "";
+
+				for (;;) {
+					const { value, done } = await reader.read();
+					if (done) {
+						break;
+					}
+					resetIdleTimer();
+					buffer += decoder.decode(value, { stream: true });
+
+					let newline;
+					while ((newline = buffer.indexOf("\n")) >= 0) {
+						const line = buffer.slice(0, newline).trim();
+						buffer = buffer.slice(newline + 1);
+						if (!line) {
+							continue;
+						}
+						const event = JSON.parse(line);
+						if (event.type === "error") {
+							throw this._error("stream", event.message);
+						}
+						onEvent(event);
+					}
+				}
+			} catch (cause) {
+				if (cause.kind) {
+					throw cause;
+				}
+				if (cause.name === "AbortError") {
+					throw this._error(timedOut ? "timeout" : "aborted", cause.message);
+				}
+				throw this._error("network", cause.message);
+			} finally {
+				clearTimeout(idleTimer);
+				if (signal) {
+					signal.removeEventListener("abort", forwardAbort);
+				}
+			}
+		},
+
 		listSessions() {
 			return this._request("sessions");
 		},

@@ -36,6 +36,8 @@ sap.ui.define([
 					return this.getText("errorTimeout");
 				case "http":
 					return this.getText("errorServer", [error.status, error.detail || ""]).trim();
+				case "stream":
+					return this.getText("errorStream", [error.message || ""]).trim();
 				default:
 					return this.getText("errorGeneric");
 			}

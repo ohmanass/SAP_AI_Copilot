@@ -15,6 +15,7 @@ Assistant IA pour SAP MM et le développement ABAP, construit sur **SAP Generati
 
 ### Interface SAPUI5
 
+- Réponses en streaming : l'outil en cours d'exécution s'affiche en direct (« Reading purchase order data », « Searching the knowledge base »), puis le texte apparaît progressivement. Un bouton **Stop** interrompt la génération sans rien enregistrer
 - Chat : envoi avec Entrée, retour à la ligne avec Shift + Entrée, indicateur de génération, rendu Markdown, copie des réponses, gestion des erreurs avec bouton « Réessayer »
 - Sources RAG affichées sous chaque réponse, avec l'extrait réellement récupéré dans ChromaDB et sa distance vectorielle
 - Outils utilisés par l'agent affichés pour chaque réponse
@@ -77,6 +78,7 @@ SAP_AI_Copilot/
 | --- | --- | --- |
 | `GET` | `/api/health` | Disponibilité du backend |
 | `POST` | `/api/chat` | Envoie un message. Renvoie `session_id`, `response`, `sources` et `tools_used` |
+| `POST` | `/api/chat/stream` | Même requête, réponse en flux NDJSON : `session`, `tool_start`, `tool_end`, `token`, `done`, `error` |
 | `GET` | `/api/sessions` | Liste des conversations |
 | `GET` | `/api/sessions/{id}` | Messages d'une conversation |
 | `DELETE` | `/api/sessions/{id}` | Supprime une conversation |
@@ -98,6 +100,18 @@ POST /api/chat
   "tools_used": ["search_sap_documentation"]
 }
 ```
+
+Exemple de flux renvoyé par `/api/chat/stream` (une ligne JSON par événement) :
+
+```text
+{"type": "session", "session_id": "0782671e-…"}
+{"type": "tool_start", "name": "get_purchase_order"}
+{"type": "tool_end", "name": "get_purchase_order", "success": true}
+{"type": "token", "content": "Purchase order"}
+{"type": "done", "session_id": "0782671e-…", "response": "…", "sources": [], "tools_used": ["get_purchase_order"]}
+```
+
+> SAP Generative AI Hub renvoie le premier token puis le reste du texte d'un seul bloc (mise en mémoire tampon côté SAP AI Core). Le frontend affiche donc ce texte reçu de façon progressive. Les événements d'outils, eux, arrivent bien en temps réel.
 
 La documentation interactive de l'API est disponible sur `http://127.0.0.1:8000/docs`.
 
@@ -162,7 +176,6 @@ Les commandes d'achat, fournisseurs et articles de la base SQLite sont **fictifs
 
 ## Pistes d'évolution
 
-- Réponses en streaming (Server-Sent Events) avec affichage de l'outil en cours
 - Affichage des données SAP sous forme de tableaux Fiori
 - Import et ré-indexation de documents depuis l'interface
 - Connexion à une API OData S/4HANA à la place de SQLite

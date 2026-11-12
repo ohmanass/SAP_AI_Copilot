@@ -18,7 +18,8 @@ class LLMClient:
         self,
         messages,
         tools=None,
-        temperature=0
+        temperature=0,
+        stream=False
     ):
 
         parameters = {
@@ -31,6 +32,10 @@ class LLMClient:
         if tools is not None:
             parameters["tools"] = tools
             parameters["tool_choice"] = "auto"
+
+        if stream:
+            # Returns an iterator of chunks instead of a single completion
+            parameters["stream"] = True
 
         return chat.completions.create(**parameters)
 

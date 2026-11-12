@@ -1,10 +1,12 @@
 
+import json
 import logging
 import threading
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app import system_info
@@ -117,6 +119,58 @@ def chat(request: ChatRequest):
             status_code=500,
             detail="An error occurred while processing your request."
         ) from error
+
+
+@app.post("/api/chat/stream")
+def chat_stream(request: ChatRequest):
+    """
+    Streaming variant of /api/chat. Response: NDJSON, one event per line:
+      session      {"type", "session_id"}
+      tool_start   {"type", "name"}
+      tool_end     {"type", "name", "success"}
+      token        {"type", "content"}
+      done         {"type", "session_id", "response", "sources", "tools_used"}
+      error        {"type", "message"}
+    """
+
+    session_id = request.session_id or str(uuid4())
+    agent, lock = get_session(session_id)
+
+    def event_line(event):
+        return json.dumps(event, ensure_ascii=False) + "\n"
+
+    def generate():
+        yield event_line({"type": "session", "session_id": session_id})
+
+        with lock:
+            try:
+                for event in agent.ask_stream(request.message):
+
+                    if event["type"] != "done":
+                        yield event_line(event)
+                        continue
+
+                    chat_store.save_exchange(
+                        session_id=session_id,
+                        user_message=request.message,
+                        assistant_message=event["response"],
+                        sources=event["sources"],
+                        tools_used=event["tools_used"]
+                    )
+                    yield event_line({**event, "session_id": session_id})
+
+            except Exception:
+                logger.exception("Streaming chat request failed")
+                yield event_line({
+                    "type": "error",
+                    "message": "An error occurred while processing your request."
+                })
+
+    return StreamingResponse(
+        generate(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    )
 
 
 @app.get("/api/sessions")
