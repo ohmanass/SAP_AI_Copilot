@@ -1,0 +1,22 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core">
+	<ResponsivePopover
+		id="sourcePopover"
+		class="cpSourcePopover"
+		title="{chat>source}"
+		placement="Top"
+		contentWidth="28rem"
+		showHeader="true">
+		<VBox class="cpSourceDetail" renderType="Bare">
+			<HBox class="cpSourceMeta" renderType="Bare" wrap="Wrap">
+				<ObjectStatus text="{path: 'chat>chunk', formatter: '.formatSourceChunk'}" icon="sap-icon://dimension" state="Information"/>
+				<ObjectStatus text="{path: 'chat>distance', formatter: '.formatter.sourceDistance'}" icon="sap-icon://measure" tooltip="{i18n>sourceDistanceHelp}"/>
+			</HBox>
+			<Text text="{i18n>sourceExcerpt}" class="cpSourcesLabel"/>
+			<ScrollContainer vertical="true" height="16rem" class="cpExcerptScroll">
+				<Text text="{chat>content}" renderWhitespace="true" class="cpExcerpt"/>
+			</ScrollContainer>
+		</VBox>
+	</ResponsivePopover>
+</core:FragmentDefinition>

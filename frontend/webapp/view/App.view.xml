@@ -1,0 +1,103 @@
+<mvc:View
+	controllerName="com.sapaicopilot.app.controller.App"
+	xmlns:mvc="sap.ui.core.mvc"
+	xmlns:core="sap.ui.core"
+	xmlns:tnt="sap.tnt"
+	xmlns="sap.m"
+	displayBlock="true"
+	height="100%">
+
+	<FlexBox id="shell" class="cpShell" height="100%" alignItems="Stretch" renderType="Bare">
+		<customData>
+			<core:CustomData key="sidebar" value="{= ${app>/sidebarOpen} ? 'open' : 'closed' }" writeToDom="true"/>
+		</customData>
+		<items>
+
+			<!-- ============ Sidebar ============ -->
+			<FlexBox class="cpSidebar" direction="Column" renderType="Bare">
+				<items>
+					<HBox class="cpBrand" alignItems="Center" renderType="Bare">
+						<Image src="img/logo.svg" width="2.25rem" height="2.25rem" decorative="true" class="cpBrandLogo"/>
+						<VBox class="cpBrandText" renderType="Bare">
+							<Text text="{i18n>appTitle}" class="cpBrandTitle"/>
+							<Text text="{i18n>appTagline}" class="cpBrandTagline"/>
+						</VBox>
+						<Button
+							icon="sap-icon://decline"
+							type="Transparent"
+							class="cpSidebarClose"
+							tooltip="{i18n>closeMenu}"
+							press=".onCloseSidebar"/>
+					</HBox>
+
+					<Button
+						id="newChatButton"
+						text="{i18n>newChat}"
+						icon="sap-icon://write-new"
+						width="100%"
+						class="cpNewChat"
+						press=".onNewChat"/>
+
+					<tnt:NavigationList
+						id="navigation"
+						class="cpNav"
+						selectedKey="{app>/section}"
+						itemSelect=".onNavSelect">
+						<tnt:NavigationListItem key="chat" text="{i18n>navChat}" icon="sap-icon://discussion-2"/>
+						<tnt:NavigationListItem key="knowledgeBase" text="{i18n>navKnowledgeBase}" icon="sap-icon://course-book"/>
+						<tnt:NavigationListItem key="settings" text="{i18n>navSettings}" icon="sap-icon://action-settings"/>
+					</tnt:NavigationList>
+
+					<Text text="{i18n>recentConversations}" class="cpSectionLabel"/>
+
+					<ScrollContainer class="cpHistoryScroll" vertical="true" horizontal="false" height="auto">
+						<List
+							id="historyList"
+							class="cpHistory"
+							items="{app>/conversations}"
+							showSeparators="None"
+							backgroundDesign="Transparent"
+							noDataText="{= ${app>/conversationsError} ? ${i18n>conversationsUnavailable} : ${i18n>noConversations} }">
+							<CustomListItem type="Active" class="cpHistoryItem" press=".onConversationPress">
+								<customData>
+									<core:CustomData key="active" value="{= ${app>session_id} === ${app>/activeSessionId} ? 'true' : 'false' }" writeToDom="true"/>
+								</customData>
+								<HBox class="cpHistoryRow" alignItems="Center" renderType="Bare">
+									<VBox class="cpHistoryText" renderType="Bare">
+										<Text text="{app>title}" tooltip="{app>title}" wrapping="false" class="cpHistoryTitle"/>
+										<Text text="{path: 'app>updated_at', formatter: '.formatter.relativeTime'}" class="cpHistoryMeta"/>
+									</VBox>
+									<Button
+										icon="sap-icon://delete"
+										type="Transparent"
+										class="cpHistoryDelete"
+										tooltip="{i18n>deleteConversation}"
+										press=".onDeleteConversation"/>
+								</HBox>
+							</CustomListItem>
+						</List>
+					</ScrollContainer>
+
+					<HBox class="cpProfile" alignItems="Center" renderType="Bare">
+						<Avatar initials="LU" displaySize="XS" backgroundColor="Accent6" class="cpProfileAvatar"/>
+						<VBox class="cpProfileText" renderType="Bare">
+							<Text text="{i18n>profileName}" class="cpProfileName"/>
+							<Text text="{i18n>profileSubtitle}" class="cpProfileMeta"/>
+						</VBox>
+						<HBox class="cpStatusDot" renderType="Bare" tooltip="{path: 'app>/backend/state', formatter: '.formatter.backendStateText'}">
+							<customData>
+								<core:CustomData key="state" value="{app>/backend/state}" writeToDom="true"/>
+							</customData>
+						</HBox>
+					</HBox>
+				</items>
+			</FlexBox>
+
+			<!-- Backdrop for the drawer on tablet / phone -->
+			<core:HTML content="&lt;div class=&quot;cpBackdrop&quot;&gt;&lt;/div&gt;"/>
+
+			<!-- ============ Pages ============ -->
+			<NavContainer id="pageContainer" class="cpMain" height="100%" width="auto" autoFocus="false"/>
+		</items>
+	</FlexBox>
+</mvc:View>

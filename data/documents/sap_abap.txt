@@ -1,0 +1,56 @@
+
+SAP ABAP - CORE DEVELOPMENT CONCEPTS
+
+1. Overview
+
+ABAP is the programming language used to develop applications and extensions in SAP systems.
+
+2. ABAP CDS Views
+
+Core Data Services (CDS) Views define semantic data models on top of database tables.
+
+They are used to expose business data, combine multiple data sources and provide reusable data models.
+
+3. CDS View Types
+
+Basic Views:
+- Define data models close to database tables.
+- Provide reusable access to underlying data.
+
+Composite Views:
+- Combine multiple basic views.
+- Implement more complex business logic.
+
+Consumption Views:
+- Designed for consumption by applications and analytical tools.
+- Often contain UI and analytical annotations.
+
+4. OData Services
+
+OData is a protocol used to expose data through REST-based APIs.
+
+In the ABAP RESTful Application Programming Model (RAP) and modern ABAP development, CDS-based services can be exposed using:
+
+- Service Definition.
+- Service Binding.
+
+5. SAP Fiori Elements
+
+SAP Fiori Elements generates user interfaces based on metadata and annotations.
+
+Common floorplans include:
+- List Report.
+- Object Page.
+- Analytical List Page.
+
+6. ABAP SQL
+
+ABAP SQL is used to read and manipulate data in the SAP database.
+
+Example:
+
+SELECT FROM ekko
+FIELDS ebeln, bukrs, lifnr
+INTO TABLE @DATA(purchase_orders).
+
+

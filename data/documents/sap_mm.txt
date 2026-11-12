@@ -1,0 +1,56 @@
+
+SAP MM - PURCHASE ORDER MANAGEMENT
+
+1. Overview
+
+SAP Materials Management (MM) is a module used to manage procurement processes, purchasing activities, inventory management and material valuation.
+
+2. Purchase Order Structure
+
+A purchase order is a formal document sent to a supplier to request materials or services.
+
+In SAP, purchase orders are represented by two main database tables:
+
+- EKKO: stores purchase order header information.
+- EKPO: stores purchase order item information.
+
+3. EKKO Table
+
+EKKO contains general information about a purchase order.
+
+Important fields:
+- EBELN: Purchase Order Number.
+- BUKRS: Company Code.
+- LIFNR: Supplier Number.
+- BEDAT: Purchasing Document Date.
+- EKORG: Purchasing Organization.
+- EKGRP: Purchasing Group.
+
+4. EKPO Table
+
+EKPO contains the details of each purchase order item.
+
+Important fields:
+- EBELN: Purchase Order Number.
+- EBELP: Purchase Order Item Number.
+- MATNR: Material Number.
+- WERKS: Plant.
+- MENGE: Order Quantity.
+- NETPR: Net Price.
+
+5. Purchase Order Lifecycle
+
+The purchasing process generally follows these steps:
+
+1. Create a purchase requisition.
+2. Create a purchase order.
+3. Send the purchase order to the supplier.
+4. Receive the materials.
+5. Post the goods receipt.
+6. Process the supplier invoice.
+
+6. Goods Receipt
+
+A goods receipt records the arrival of materials at a plant.
+
+In SAP, goods movements are represented in material document data. In modern SAP S/4HANA, MATDOC is the central table for material document data.

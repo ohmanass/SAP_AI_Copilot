@@ -1,0 +1,6 @@
+sap-ai-sdk-gen
+python-dotenv
+pytest
+chromadb
+fastapi
+uvicorn[standard]

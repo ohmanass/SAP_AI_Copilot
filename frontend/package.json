@@ -1,0 +1,16 @@
+{
+  "name": "sap-ai-copilot-frontend",
+  "version": "1.0.0",
+  "description": "SAPUI5 freestyle frontend for SAP AI Copilot",
+  "private": true,
+  "scripts": {
+    "start": "ui5 serve --port 8080 --open index.html",
+    "serve": "ui5 serve --port 8080",
+    "build": "ui5 build --clean-dest",
+    "lint": "ui5lint"
+  },
+  "devDependencies": {
+    "@ui5/cli": "4.0.71",
+    "@ui5/linter": "1.23.7"
+  }
+}

@@ -1,0 +1,169 @@
+<mvc:View
+	controllerName="com.sapaicopilot.app.controller.Chat"
+	xmlns:mvc="sap.ui.core.mvc"
+	xmlns:core="sap.ui.core"
+	xmlns:tnt="sap.tnt"
+	xmlns="sap.m"
+	height="100%">
+
+	<Page id="chatPage" showHeader="false" enableScrolling="false" backgroundDesign="Transparent" class="cpPage">
+		<FlexBox class="cpChat" direction="Column" height="100%" renderType="Bare">
+			<items>
+
+				<!-- ============ Top bar ============ -->
+				<HBox class="cpTopbar" alignItems="Center" renderType="Bare">
+					<Button icon="sap-icon://menu2" type="Transparent" class="cpMenuBtn" tooltip="{i18n>openMenu}" press=".onOpenSidebar"/>
+					<VBox class="cpTopbarText" renderType="Bare">
+						<Title text="{chat>/title}" level="H2" wrapping="false" class="cpTopbarTitle"/>
+						<Text text="{= ${app>/model/chat} ? ${app>/model/chat} + ' · ' + ${app>/model/provider} : '' }" class="cpTopbarMeta"/>
+					</VBox>
+					<HBox class="cpStatusPill" alignItems="Center" renderType="Bare">
+						<customData>
+							<core:CustomData key="state" value="{app>/backend/state}" writeToDom="true"/>
+						</customData>
+						<Text text="{path: 'app>/backend/state', formatter: '.formatter.backendStateText'}"/>
+					</HBox>
+				</HBox>
+
+				<!-- ============ Conversation ============ -->
+				<ScrollContainer id="scroller" class="cpScroller" vertical="true" horizontal="false" height="auto">
+					<VBox class="cpColumn" renderType="Bare">
+
+						<!-- Welcome screen -->
+						<VBox class="cpWelcome" renderType="Bare" visible="{= ${chat>/messages}.length === 0 &amp;&amp; !${chat>/loading} }">
+							<Image src="img/logo.svg" width="3.5rem" height="3.5rem" decorative="true" class="cpWelcomeLogo"/>
+							<Text text="{i18n>welcomeEyebrow}" class="cpEyebrow"/>
+							<Title text="{i18n>welcomeTitle}" level="H1" wrapping="true" class="cpWelcomeTitle"/>
+							<Text text="{i18n>welcomeText}" class="cpWelcomeText"/>
+							<List
+								id="suggestions"
+								class="cpSuggestions"
+								items="{chat>/suggestions}"
+								showSeparators="None"
+								backgroundDesign="Transparent"
+								itemPress=".onSuggestionPress">
+								<CustomListItem type="Active" class="cpSuggestion">
+									<HBox class="cpSuggestionInner" alignItems="Start" renderType="Bare">
+										<core:Icon src="{chat>icon}" class="cpSuggestionIcon"/>
+										<VBox renderType="Bare" class="cpSuggestionText">
+											<Text text="{chat>text}" class="cpSuggestionTitle"/>
+											<Text text="{chat>hint}" class="cpSuggestionHint"/>
+										</VBox>
+									</HBox>
+								</CustomListItem>
+							</List>
+						</VBox>
+
+						<BusyIndicator visible="{chat>/loading}" size="2rem" class="cpLoading"/>
+
+						<!-- Messages -->
+						<VBox id="thread" class="cpThread" renderType="Bare" items="{path: 'chat>/messages', templateShareable: false}">
+							<items>
+								<HBox class="cpMessage" renderType="Bare">
+									<customData>
+										<core:CustomData key="role" value="{chat>role}" writeToDom="true"/>
+									</customData>
+
+									<Image src="img/logo.svg" width="2rem" height="2rem" decorative="true" class="cpMsgAvatar" visible="{= ${chat>role} !== 'user' }"/>
+
+									<VBox class="cpMsgBody" renderType="Bare">
+										<Text text="{i18n>assistant}" class="cpMsgAuthor" visible="{= ${chat>role} !== 'user' }"/>
+
+										<Text text="{chat>content}" renderWhitespace="true" class="cpUserBubble" visible="{= ${chat>role} === 'user' }"/>
+
+										<core:HTML content="{chat>html}" sanitizeContent="true" preferDOM="false" visible="{= ${chat>role} === 'assistant' }"/>
+
+										<MessageStrip
+											visible="{= ${chat>role} === 'error' }"
+											type="Error"
+											showIcon="true"
+											text="{chat>content}"
+											class="cpErrorStrip"/>
+										<Button
+											visible="{= ${chat>role} === 'error' &amp;&amp; !!${chat>failedText} }"
+											text="{i18n>retry}"
+											icon="sap-icon://refresh"
+											class="cpRetry"
+											press=".onRetry"/>
+
+										<!-- Tools actually called by the agent -->
+										<HBox class="cpTools" wrap="Wrap" renderType="Bare" visible="{= ${chat>tools}.length > 0 }"
+											items="{path: 'chat>tools', templateShareable: false}">
+											<tnt:InfoLabel text="{chat>label}" icon="{chat>icon}" colorScheme="6" class="cpToolLabel"/>
+										</HBox>
+
+										<!-- Documentation chunks actually retrieved by RAG -->
+										<VBox class="cpSources" renderType="Bare" visible="{= ${chat>sources}.length > 0 }">
+											<Text text="{i18n>sources}" class="cpSourcesLabel"/>
+											<HBox class="cpSourceList" wrap="Wrap" renderType="Bare"
+												items="{path: 'chat>sources', templateShareable: false}">
+												<Button
+													text="{chat>label}"
+													icon="sap-icon://document-text"
+													class="cpSourceChip"
+													tooltip="{path: 'chat>distance', formatter: '.formatter.sourceDistance'}"
+													press=".onSourcePress"/>
+											</HBox>
+										</VBox>
+
+										<HBox class="cpMsgFooter" alignItems="Center" renderType="Bare" visible="{= ${chat>role} !== 'error' }">
+											<Text text="{path: 'chat>time', formatter: '.formatter.messageTime'}" class="cpMsgTime"/>
+											<Button
+												icon="sap-icon://copy"
+												type="Transparent"
+												class="cpIconBtn"
+												tooltip="{i18n>copy}"
+												visible="{= ${chat>role} === 'assistant' }"
+												press=".onCopy"/>
+										</HBox>
+									</VBox>
+								</HBox>
+							</items>
+						</VBox>
+
+						<!-- Generation indicator -->
+						<HBox id="pendingIndicator" class="cpMessage cpPending" renderType="Bare" visible="{chat>/pending}">
+							<customData>
+								<core:CustomData key="role" value="assistant" writeToDom="true"/>
+							</customData>
+							<Image src="img/logo.svg" width="2rem" height="2rem" decorative="true" class="cpMsgAvatar"/>
+							<HBox class="cpTyping" alignItems="Center" renderType="Bare">
+								<core:HTML content="&lt;span class=&quot;cpDots&quot; aria-hidden=&quot;true&quot;&gt;&lt;i&gt;&lt;/i&gt;&lt;i&gt;&lt;/i&gt;&lt;i&gt;&lt;/i&gt;&lt;/span&gt;"/>
+								<Text text="{i18n>thinking}" class="cpTypingText"/>
+							</HBox>
+						</HBox>
+					</VBox>
+				</ScrollContainer>
+
+				<!-- ============ Composer ============ -->
+				<VBox class="cpComposerWrap" renderType="Bare">
+					<HBox class="cpComposer" alignItems="End" renderType="Bare">
+						<TextArea
+							id="input"
+							class="cpInput"
+							value="{chat>/draft}"
+							valueLiveUpdate="true"
+							placeholder="{i18n>inputPlaceholder}"
+							rows="1"
+							growing="true"
+							growingMaxLines="8"
+							width="100%"
+							maxLength="8000"/>
+						<Button
+							id="sendButton"
+							icon="sap-icon://paper-plane"
+							type="Emphasized"
+							class="cpSend"
+							tooltip="{i18n>send}"
+							enabled="{= !${chat>/pending} &amp;&amp; !${chat>/loading} &amp;&amp; !!${chat>/draft} }"
+							press=".onSend"/>
+					</HBox>
+					<HBox class="cpComposerMeta" renderType="Bare">
+						<Text text="{i18n>composerHint}" class="cpComposerHint"/>
+						<Text text="{i18n>disclaimer}" class="cpComposerHint cpDisclaimer"/>
+					</HBox>
+				</VBox>
+			</items>
+		</FlexBox>
+	</Page>
+</mvc:View>

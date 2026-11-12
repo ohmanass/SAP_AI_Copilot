@@ -1,0 +1,178 @@
+<mvc:View
+	controllerName="com.sapaicopilot.app.controller.Settings"
+	xmlns:mvc="sap.ui.core.mvc"
+	xmlns:core="sap.ui.core"
+	xmlns:tnt="sap.tnt"
+	xmlns="sap.m"
+	height="100%">
+
+	<Page id="settingsPage" showHeader="false" backgroundDesign="Transparent" class="cpPage">
+		<VBox class="cpContent" renderType="Bare">
+
+			<HBox class="cpPageHeader" alignItems="Center" renderType="Bare">
+				<Button icon="sap-icon://menu2" type="Transparent" class="cpMenuBtn" tooltip="{i18n>openMenu}" press=".onOpenSidebar"/>
+				<VBox class="cpPageHeaderText" renderType="Bare">
+					<Title text="{i18n>settingsTitle}" level="H1" class="cpPageTitle"/>
+					<Text text="{i18n>settingsSubtitle}" class="cpPageSubtitle"/>
+				</VBox>
+				<Button text="{i18n>recheck}" icon="sap-icon://refresh" class="cpGhostBtn" press=".onRefresh" enabled="{= !${settings>/busy} }"/>
+			</HBox>
+
+			<MessageStrip type="Error" showIcon="true" text="{settings>/error}" visible="{= !!${settings>/error} }" class="cpStrip"/>
+
+			<FlexBox class="cpCardGrid" wrap="Wrap" renderType="Bare" busy="{settings>/busy}" busyIndicatorDelay="0">
+
+				<!-- Backend -->
+				<VBox class="cpCard" renderType="Bare">
+					<HBox alignItems="Center" renderType="Bare" class="cpCardHeader">
+						<core:Icon src="sap-icon://it-host" class="cpCardIcon"/>
+						<Title text="{i18n>cardBackend}" level="H3" class="cpCardTitle"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare">
+						<Text text="{i18n>labelStatus}" class="cpRowLabel"/>
+						<ObjectStatus
+							text="{= ${app>/backend/state} === 'online' ? ${i18n>valueOnline} : ${i18n>valueOffline} }"
+							state="{= ${app>/backend/state} === 'online' ? 'Success' : 'Error' }"
+							inverted="true"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare">
+						<Text text="{i18n>labelEndpoint}" class="cpRowLabel"/>
+						<Text text="{settings>/endpoint}" class="cpRowValue cpMono"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare">
+						<Text text="{i18n>labelLastCheck}" class="cpRowLabel"/>
+						<Text text="{path: 'settings>/checkedAt', formatter: '.formatter.dateTime'}" class="cpRowValue"/>
+					</HBox>
+				</VBox>
+
+				<!-- Generative AI -->
+				<VBox class="cpCard" renderType="Bare">
+					<HBox alignItems="Center" renderType="Bare" class="cpCardHeader">
+						<core:Icon src="sap-icon://da" class="cpCardIcon"/>
+						<Title text="{i18n>cardAi}" level="H3" class="cpCardTitle"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare">
+						<Text text="{i18n>labelProvider}" class="cpRowLabel"/>
+						<Text text="{= ${settings>/status/ai/provider} || '—' }" class="cpRowValue"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare">
+						<Text text="{i18n>labelCredentials}" class="cpRowLabel"/>
+						<ObjectStatus
+							visible="{= !!${settings>/status} }"
+							text="{= ${settings>/status/ai/configured} ? ${i18n>valueConfigured} : ${i18n>valueNotConfigured} }"
+							state="{= ${settings>/status/ai/configured} ? 'Success' : 'Error' }"
+							inverted="true"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare">
+						<Text text="{i18n>labelChatModel}" class="cpRowLabel"/>
+						<tnt:InfoLabel text="{= ${settings>/status/ai/chat_model} || '—' }" colorScheme="6" class="cpToolLabel"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare">
+						<Text text="{i18n>labelConnection}" class="cpRowLabel"/>
+						<ObjectStatus
+							text="{path: 'settings>/status/ai/connection', formatter: '.formatConnection'}"
+							state="{= ${settings>/status/ai/connection} ? (${settings>/status/ai/connection/reachable} ? 'Success' : 'Error') : 'None' }"
+							inverted="{= !!${settings>/status/ai/connection} }"/>
+					</HBox>
+					<HBox class="cpCardActions" alignItems="Center" renderType="Bare">
+						<Button
+							text="{i18n>testConnection}"
+							icon="sap-icon://connected"
+							class="cpGhostBtn"
+							enabled="{= !${settings>/testing} &amp;&amp; !!${settings>/status/ai/configured} }"
+							busy="{settings>/testing}"
+							busyIndicatorDelay="0"
+							press=".onTestConnection"/>
+						<Text text="{i18n>testConnectionHint}" class="cpCardNote"/>
+					</HBox>
+				</VBox>
+
+				<!-- Vector store -->
+				<VBox class="cpCard" renderType="Bare">
+					<HBox alignItems="Center" renderType="Bare" class="cpCardHeader">
+						<core:Icon src="sap-icon://chain-link" class="cpCardIcon"/>
+						<Title text="{i18n>cardVector}" level="H3" class="cpCardTitle"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare">
+						<Text text="{i18n>labelStatus}" class="cpRowLabel"/>
+						<ObjectStatus
+							visible="{= !!${settings>/status} }"
+							text="{path: 'settings>/status/vector_store/available', formatter: '.formatter.availability'}"
+							state="{path: 'settings>/status/vector_store/available', formatter: '.formatter.availabilityState'}"
+							inverted="true"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare">
+						<Text text="{i18n>labelCollection}" class="cpRowLabel"/>
+						<Text text="{= ${settings>/status/vector_store/collection} || '—' }" class="cpRowValue cpMono"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare">
+						<Text text="{i18n>labelChunks}" class="cpRowLabel"/>
+						<Text text="{= ${settings>/status} ? String(${settings>/status/vector_store/total_chunks}) : '—' }" class="cpRowValue"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare">
+						<Text text="{i18n>labelEmbeddingModel}" class="cpRowLabel"/>
+						<Text text="{= ${settings>/status/vector_store/embedding_model} || '—' }" class="cpRowValue cpMono"/>
+					</HBox>
+				</VBox>
+
+				<!-- SAP data -->
+				<VBox class="cpCard" renderType="Bare">
+					<HBox alignItems="Center" renderType="Bare" class="cpCardHeader">
+						<core:Icon src="sap-icon://database" class="cpCardIcon"/>
+						<Title text="{i18n>cardDatabase}" level="H3" class="cpCardTitle"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare">
+						<Text text="{i18n>labelStatus}" class="cpRowLabel"/>
+						<ObjectStatus
+							visible="{= !!${settings>/status} }"
+							text="{path: 'settings>/status/sap_database/available', formatter: '.formatter.availability'}"
+							state="{path: 'settings>/status/sap_database/available', formatter: '.formatter.availabilityState'}"
+							inverted="true"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare">
+						<Text text="{i18n>labelSuppliers}" class="cpRowLabel"/>
+						<Text text="{= ${settings>/status/sap_database/available} ? String(${settings>/status/sap_database/tables/suppliers}) : '—' }" class="cpRowValue"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare">
+						<Text text="{i18n>labelPurchaseOrders}" class="cpRowLabel"/>
+						<Text text="{= ${settings>/status/sap_database/available} ? String(${settings>/status/sap_database/tables/purchase_orders}) : '—' }" class="cpRowValue"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare">
+						<Text text="{i18n>labelItems}" class="cpRowLabel"/>
+						<Text text="{= ${settings>/status/sap_database/available} ? String(${settings>/status/sap_database/tables/purchase_order_items}) : '—' }" class="cpRowValue"/>
+					</HBox>
+					<Text text="{i18n>databaseNote}" class="cpCardNote"/>
+				</VBox>
+
+				<!-- Frontend -->
+				<VBox class="cpCard" renderType="Bare">
+					<HBox alignItems="Center" renderType="Bare" class="cpCardHeader">
+						<core:Icon src="sap-icon://laptop" class="cpCardIcon"/>
+						<Title text="{i18n>cardFrontend}" level="H3" class="cpCardTitle"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare">
+						<Text text="{i18n>labelUi5Version}" class="cpRowLabel"/>
+						<Text text="{settings>/ui5Version}" class="cpRowValue cpMono"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare">
+						<Text text="{i18n>labelTheme}" class="cpRowLabel"/>
+						<Text text="{settings>/theme}" class="cpRowValue cpMono"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare">
+						<Text text="{i18n>labelAppVersion}" class="cpRowLabel"/>
+						<Text text="{settings>/appVersion}" class="cpRowValue cpMono"/>
+					</HBox>
+				</VBox>
+
+				<!-- Security -->
+				<VBox class="cpCard" renderType="Bare">
+					<HBox alignItems="Center" renderType="Bare" class="cpCardHeader">
+						<core:Icon src="sap-icon://locked" class="cpCardIcon"/>
+						<Title text="{i18n>cardSecurity}" level="H3" class="cpCardTitle"/>
+					</HBox>
+					<Text text="{i18n>securityText}" class="cpCardText"/>
+				</VBox>
+			</FlexBox>
+		</VBox>
+	</Page>
+</mvc:View>

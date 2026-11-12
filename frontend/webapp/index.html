@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="color-scheme" content="dark">
+	<meta name="theme-color" content="#070d1a">
+	<title>SAP AI Copilot</title>
+	<link rel="icon" href="img/logo.svg" type="image/svg+xml">
+	<style>
+		html, body, #content, #content > div { height: 100%; margin: 0; background: #070d1a; }
+	</style>
+	<script
+		id="sap-ui-bootstrap"
+		src="resources/sap-ui-core.js"
+		data-sap-ui-theme="sap_horizon_dark"
+		data-sap-ui-compat-version="edge"
+		data-sap-ui-async="true"
+		data-sap-ui-on-init="module:sap/ui/core/ComponentSupport"
+		data-sap-ui-resource-roots='{ "com.sapaicopilot.app": "./" }'
+		data-sap-ui-frame-options="trusted">
+	</script>
+</head>
+<body class="sapUiBody cpBody" id="content">
+	<div
+		data-sap-ui-component
+		data-name="com.sapaicopilot.app"
+		data-id="container"
+		data-settings='{ "id": "copilot" }'
+		data-height="100%">
+	</div>
+</body>
+</html>

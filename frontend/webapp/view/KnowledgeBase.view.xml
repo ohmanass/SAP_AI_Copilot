@@ -1,0 +1,124 @@
+<mvc:View
+	controllerName="com.sapaicopilot.app.controller.KnowledgeBase"
+	xmlns:mvc="sap.ui.core.mvc"
+	xmlns:core="sap.ui.core"
+	xmlns="sap.m"
+	height="100%">
+
+	<Page id="kbPage" showHeader="false" backgroundDesign="Transparent" class="cpPage">
+		<VBox class="cpContent" renderType="Bare">
+
+			<HBox class="cpPageHeader" alignItems="Center" renderType="Bare">
+				<Button icon="sap-icon://menu2" type="Transparent" class="cpMenuBtn" tooltip="{i18n>openMenu}" press=".onOpenSidebar"/>
+				<VBox class="cpPageHeaderText" renderType="Bare">
+					<Title text="{i18n>kbTitle}" level="H1" class="cpPageTitle"/>
+					<Text text="{i18n>kbSubtitle}" class="cpPageSubtitle"/>
+				</VBox>
+				<Button text="{i18n>refresh}" icon="sap-icon://refresh" class="cpGhostBtn" press=".onRefresh" enabled="{= !${kb>/busy} }"/>
+			</HBox>
+
+			<MessageStrip type="Error" showIcon="true" text="{kb>/error}" visible="{= !!${kb>/error} }" class="cpStrip"/>
+			<MessageStrip
+				type="Error"
+				showIcon="true"
+				visible="{= !!${kb>/data} &amp;&amp; !${kb>/data/vector_store/available} }"
+				text="{path: 'kb>/data/vector_store/error', formatter: '.formatVectorStoreError'}"
+				class="cpStrip"/>
+			<MessageStrip
+				type="Warning"
+				showIcon="true"
+				visible="{path: 'kb>/data/orphan_sources', formatter: '.hasItems'}"
+				text="{path: 'kb>/data/orphan_sources', formatter: '.formatOrphans'}"
+				class="cpStrip"/>
+
+			<!-- KPIs -->
+			<FlexBox class="cpKpis" wrap="Wrap" renderType="Bare" busy="{kb>/busy}" busyIndicatorDelay="0">
+				<VBox class="cpKpi" renderType="Bare">
+					<core:Icon src="sap-icon://documents" class="cpKpiIcon"/>
+					<Text text="{i18n>kbDocuments}" class="cpKpiLabel"/>
+					<Text text="{= ${kb>/data} ? String(${kb>/data/summary/document_count}) : '—' }" class="cpKpiValue"/>
+				</VBox>
+				<VBox class="cpKpi" renderType="Bare">
+					<core:Icon src="sap-icon://complete" class="cpKpiIcon"/>
+					<Text text="{i18n>kbIndexed}" class="cpKpiLabel"/>
+					<Text text="{= ${kb>/data} ? ${kb>/data/summary/indexed_documents} + ' / ' + ${kb>/data/summary/document_count} : '—' }" class="cpKpiValue"/>
+				</VBox>
+				<VBox class="cpKpi" renderType="Bare">
+					<core:Icon src="sap-icon://dimension" class="cpKpiIcon"/>
+					<Text text="{i18n>kbChunks}" class="cpKpiLabel"/>
+					<Text text="{= ${kb>/data} ? String(${kb>/data/summary/total_chunks}) : '—' }" class="cpKpiValue"/>
+				</VBox>
+				<VBox class="cpKpi" renderType="Bare">
+					<core:Icon src="sap-icon://chain-link" class="cpKpiIcon"/>
+					<Text text="{i18n>kbEmbedding}" class="cpKpiLabel"/>
+					<Text text="{= ${kb>/data} ? ${kb>/data/embedding_model} : '—' }" class="cpKpiValue cpKpiValueSmall"/>
+				</VBox>
+			</FlexBox>
+
+			<!-- Documents -->
+			<VBox class="cpCard cpTableCard" renderType="Bare">
+				<Table
+					id="documentsTable"
+					class="cpTable"
+					items="{kb>/data/documents}"
+					noDataText="{i18n>kbNoDocuments}"
+					backgroundDesign="Transparent"
+					popinLayout="GridSmall"
+					busy="{kb>/busy}"
+					busyIndicatorDelay="0">
+					<columns>
+						<Column width="34%">
+							<Text text="{i18n>kbColDocument}"/>
+						</Column>
+						<Column minScreenWidth="Tablet" demandPopin="true">
+							<Text text="{i18n>kbColType}"/>
+						</Column>
+						<Column minScreenWidth="Tablet" demandPopin="true" hAlign="End">
+							<Text text="{i18n>kbColSize}"/>
+						</Column>
+						<Column hAlign="End">
+							<Text text="{i18n>kbColChunks}"/>
+						</Column>
+						<Column>
+							<Text text="{i18n>kbColStatus}"/>
+						</Column>
+						<Column minScreenWidth="Desktop" demandPopin="true">
+							<Text text="{i18n>kbColModified}"/>
+						</Column>
+					</columns>
+					<items>
+						<ColumnListItem>
+							<HBox alignItems="Center" renderType="Bare" class="cpDocCell">
+								<core:Icon src="sap-icon://document-text" class="cpDocIcon"/>
+								<VBox renderType="Bare">
+									<Text text="{kb>name}" class="cpDocName"/>
+									<Text text="{= ${kb>/data/documents_path} + '/' + ${kb>name} }" class="cpDocPath"/>
+								</VBox>
+							</HBox>
+							<Text text="{kb>type}"/>
+							<Text text="{path: 'kb>size_bytes', formatter: '.formatter.fileSize'}"/>
+							<Text text="{parts: ['kb>indexed_chunks', 'kb>expected_chunks'], formatter: '.formatter.kbChunks'}"/>
+							<ObjectStatus
+								text="{path: 'kb>status', formatter: '.formatter.kbStatusText'}"
+								state="{path: 'kb>status', formatter: '.formatter.kbStatusState'}"
+								icon="{path: 'kb>status', formatter: '.formatter.kbStatusIcon'}"
+								inverted="true"/>
+							<Text text="{path: 'kb>modified_at', formatter: '.formatter.dateTime'}"/>
+						</ColumnListItem>
+					</items>
+				</Table>
+			</VBox>
+
+			<!-- How to index -->
+			<VBox class="cpCard cpHowTo" renderType="Bare">
+				<HBox alignItems="Center" renderType="Bare" class="cpCardHeader">
+					<core:Icon src="sap-icon://hint" class="cpCardIcon"/>
+					<Title text="{i18n>kbHowToTitle}" level="H3" class="cpCardTitle"/>
+				</HBox>
+				<Text text="{i18n>kbHowToText}" class="cpCardText"/>
+				<Text text="{i18n>kbHowToCommand}" class="cpCodeLine"/>
+				<Text text="{i18n>kbHowToNote}" class="cpCardNote"/>
+			</VBox>
+		</VBox>
+	</Page>
+</mvc:View>
