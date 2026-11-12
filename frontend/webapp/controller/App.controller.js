@@ -2,8 +2,9 @@ sap.ui.define([
 	"./BaseController",
 	"sap/m/MessageBox",
 	"sap/m/MessageToast",
-	"sap/ui/core/EventBus"
-], (BaseController, MessageBox, MessageToast, EventBus) => {
+	"sap/ui/core/EventBus",
+	"sap/ui/model/json/JSONModel"
+], (BaseController, MessageBox, MessageToast, EventBus, JSONModel) => {
 	"use strict";
 
 	return BaseController.extend("com.sapaicopilot.app.controller.App", {
@@ -48,8 +49,8 @@ sap.ui.define([
 		},
 
 		onConversationPress(event) {
-			// Ignore the item press triggered by the delete button inside the item
-			if (Date.now() - (this._deletePressedAt || 0) < 400) {
+			// Ignore the item press triggered by the rename / delete buttons inside the item
+			if (Date.now() - (this._actionPressedAt || 0) < 400) {
 				return;
 			}
 			const sessionId = event.getSource().getBindingContext("app").getProperty("session_id");
@@ -57,8 +58,81 @@ sap.ui.define([
 			this.onCloseSidebar();
 		},
 
+		/* ------------------------- Rename ------------------------- */
+
+		async onRenameConversation(event) {
+			this._actionPressedAt = Date.now();
+			const conversation = event.getSource().getBindingContext("app").getObject();
+
+			if (!this._renameDialog) {
+				this._renameDialog = this.loadFragment({
+					name: "com.sapaicopilot.app.view.fragment.RenameDialog"
+				});
+				this.getView().setModel(new JSONModel({}), "rename");
+			}
+			const dialog = await this._renameDialog;
+
+			this.getView().getModel("rename").setData({
+				sessionId: conversation.session_id,
+				title: conversation.title,
+				valid: true,
+				busy: false
+			});
+			dialog.open();
+		},
+
+		onRenameDialogOpened() {
+			// Select the current title so typing replaces it
+			const input = this.byId("renameInput");
+			input.focus();
+			const domRef = input.getFocusDomRef();
+			if (domRef) {
+				domRef.select();
+			}
+		},
+
+		onRenameLiveChange(event) {
+			this.getView().getModel("rename").setProperty("/valid", event.getParameter("value").trim().length > 0);
+		},
+
+		async onRenameSave() {
+			const model = this.getView().getModel("rename");
+			const { sessionId, title, busy } = model.getData();
+			const newTitle = (title || "").trim();
+			if (busy || !newTitle) {
+				return;
+			}
+
+			model.setProperty("/busy", true);
+			try {
+				const result = await this.getService().renameSession(sessionId, newTitle);
+				(await this._renameDialog).close();
+				MessageToast.show(this.getText("conversationRenamed"));
+				EventBus.getInstance().publish("copilot", "conversationRenamed", {
+					sessionId,
+					title: result.title
+				});
+				this.getOwnerComponent().refreshConversations();
+			} catch (error) {
+				MessageBox.error(this.describeError(error));
+			} finally {
+				model.setProperty("/busy", false);
+			}
+		},
+
+		async onRenameCancel(promiseOrEvent) {
+			// Escape key: UI5 passes {resolve, reject} and closes the dialog on resolve
+			if (promiseOrEvent && typeof promiseOrEvent.resolve === "function") {
+				promiseOrEvent.resolve();
+				return;
+			}
+			(await this._renameDialog).close();
+		},
+
+		/* ------------------------- Delete ------------------------- */
+
 		onDeleteConversation(event) {
-			this._deletePressedAt = Date.now();
+			this._actionPressedAt = Date.now();
 
 			const conversation = event.getSource().getBindingContext("app").getObject();
 			const deleteAction = this.getText("deleteAction");

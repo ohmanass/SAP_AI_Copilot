@@ -215,6 +215,23 @@ def get_session_history(session_id: str):
     return conversation
 
 
+class RenameRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+
+
+@app.patch("/api/sessions/{session_id}")
+def rename_session(session_id: str, request: RenameRequest):
+
+    if not request.title.strip():
+        raise HTTPException(status_code=422, detail="The title cannot be empty.")
+
+    if not chat_store.rename_conversation(session_id, request.title):
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+
+    conversation = chat_store.get_conversation(session_id)
+    return {"session_id": session_id, "title": conversation["title"]}
+
+
 @app.delete("/api/sessions/{session_id}")
 def delete_session(session_id: str):
 

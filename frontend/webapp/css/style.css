@@ -305,21 +305,29 @@ html, body.cpBody {
 	color: var(--cp-muted);
 }
 
-.cpHistoryDelete {
+.cpHistoryAction {
 	flex: none;
 	opacity: 0;
 	transition: opacity 0.15s ease;
 }
 
-.cpHistoryItem:hover .cpHistoryDelete,
-.cpHistoryItem:focus-within .cpHistoryDelete {
+.cpHistoryItem:hover .cpHistoryAction,
+.cpHistoryItem:focus-within .cpHistoryAction,
+.cpHistoryItem[data-active="true"] .cpHistoryAction {
 	opacity: 1;
 }
 
 @media (hover: none) {
-	.cpHistoryDelete {
+	.cpHistoryAction {
 		opacity: 1;
 	}
+}
+
+.cpRenameBody {
+	display: flex;
+	flex-direction: column;
+	gap: 0.375rem;
+	padding: 1rem 1.25rem 0.5rem;
 }
 
 /* Profile */

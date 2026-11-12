@@ -198,6 +198,18 @@ def get_conversation(session_id: str):
     return result
 
 
+def rename_conversation(session_id: str, title: str) -> bool:
+    """Change a conversation title (normalised like generated titles)."""
+
+    with _connect() as connection:
+        cursor = connection.execute(
+            "UPDATE conversations SET title = ? WHERE session_id = ?",
+            (build_title(title), session_id)
+        )
+
+    return cursor.rowcount > 0
+
+
 def delete_conversation(session_id: str) -> bool:
     with _connect() as connection:
         cursor = connection.execute(

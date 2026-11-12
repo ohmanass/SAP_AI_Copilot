@@ -181,6 +181,13 @@ sap.ui.define([
 			return this._request(`sessions/${encodeURIComponent(sessionId)}`);
 		},
 
+		renameSession(sessionId, title) {
+			return this._request(`sessions/${encodeURIComponent(sessionId)}`, {
+				method: "PATCH",
+				body: { title }
+			});
+		},
+
 		deleteSession(sessionId) {
 			return this._request(`sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
 		},

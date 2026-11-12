@@ -1,9 +1,8 @@
-Ajout de l'onglet Modules : espaces de travail par module SAP
+Onglet Modules et renommage des conversations
 
-- Registre des modules (MM connecté, ABAP documentation, SD et FI prévus)
-  et endpoint GET /api/modules
-- Agent cadré par module : outils autorisés, consignes du prompt,
-  recherche documentaire filtrée sur les documents du module
+- Espaces de travail par module SAP (MM connecté, ABAP documentation,
+  SD et FI prévus) : outils, consignes et documentation filtrés par module
+- Endpoint GET /api/modules et page Modules
 - Une conversation garde son module (migration additive de l'historique)
-- Page Modules, espace de travail dans le chat (pastille, accueil et
-  suggestions du module), étiquette du module dans l'historique
+- Renommage d'une conversation depuis l'historique (PATCH /api/sessions/{id}),
+  titre mis à jour en direct dans l'en-tête du chat

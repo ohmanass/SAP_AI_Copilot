@@ -1,0 +1,36 @@
+<core:FragmentDefinition
+	xmlns="sap.m"
+	xmlns:core="sap.ui.core">
+	<Dialog
+		id="renameDialog"
+		class="cpRenameDialog"
+		title="{i18n>renameTitle}"
+		contentWidth="26rem"
+		draggable="false"
+		afterOpen=".onRenameDialogOpened"
+		escapeHandler=".onRenameCancel">
+		<VBox class="cpRenameBody" renderType="Bare">
+			<Label text="{i18n>renameLabel}" labelFor="renameInput" class="cpRenameLabel"/>
+			<Input
+				id="renameInput"
+				value="{rename>/title}"
+				valueLiveUpdate="true"
+				maxLength="60"
+				showValueStateMessage="false"
+				valueState="{= ${rename>/valid} ? 'None' : 'Error' }"
+				liveChange=".onRenameLiveChange"
+				submit=".onRenameSave"
+				width="100%"/>
+		</VBox>
+		<beginButton>
+			<Button
+				text="{i18n>renameAction}"
+				type="Emphasized"
+				enabled="{= !${rename>/busy} &amp;&amp; ${rename>/valid} }"
+				press=".onRenameSave"/>
+		</beginButton>
+		<endButton>
+			<Button text="{i18n>cancel}" press=".onRenameCancel"/>
+		</endButton>
+	</Dialog>
+</core:FragmentDefinition>

@@ -44,6 +44,7 @@ sap.ui.define([
 			router.getRoute("moduleChat").attachPatternMatched(this._onModuleChatRoute, this);
 
 			EventBus.getInstance().subscribe("copilot", "newChat", this._onNewChatEvent, this);
+			EventBus.getInstance().subscribe("copilot", "conversationRenamed", this._onConversationRenamed, this);
 
 			// Enter sends, Shift + Enter inserts a line break
 			this.byId("input").attachBrowserEvent("keydown", this._onInputKeyDown, this);
@@ -56,6 +57,14 @@ sap.ui.define([
 
 		onExit() {
 			EventBus.getInstance().unsubscribe("copilot", "newChat", this._onNewChatEvent, this);
+			EventBus.getInstance().unsubscribe("copilot", "conversationRenamed", this._onConversationRenamed, this);
+		},
+
+		/** Keep the header title in sync when the open conversation is renamed. */
+		_onConversationRenamed(channel, event, data) {
+			if (data && data.sessionId === this._chat().getProperty("/sessionId")) {
+				this._chat().setProperty("/title", data.title);
+			}
 		},
 
 		/* =========================== Routing =========================== */

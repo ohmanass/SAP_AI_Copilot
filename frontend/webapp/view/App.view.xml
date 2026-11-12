@@ -75,9 +75,15 @@
 										</HBox>
 									</VBox>
 									<Button
+										icon="sap-icon://edit"
+										type="Transparent"
+										class="cpHistoryAction cpHistoryRename"
+										tooltip="{i18n>renameConversation}"
+										press=".onRenameConversation"/>
+									<Button
 										icon="sap-icon://delete"
 										type="Transparent"
-										class="cpHistoryDelete"
+										class="cpHistoryAction cpHistoryDelete"
 										tooltip="{i18n>deleteConversation}"
 										press=".onDeleteConversation"/>
 								</HBox>
