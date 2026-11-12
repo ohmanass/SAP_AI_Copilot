@@ -17,6 +17,17 @@
 						<Title text="{chat>/title}" level="H2" wrapping="false" class="cpTopbarTitle"/>
 						<Text text="{= ${app>/model/chat} ? ${app>/model/chat} + ' · ' + ${app>/model/provider} + (${app>/model/dataSource} ? ' · ' + ${app>/model/dataSource} : '') : '' }" class="cpTopbarMeta"/>
 					</VBox>
+					<HBox class="cpModulePill" alignItems="Center" renderType="Bare" visible="{= !!${chat>/moduleInfo} }">
+						<core:Icon src="{chat>/moduleInfo/icon}" class="cpModulePillIcon"/>
+						<Text text="{chat>/moduleInfo/code}" class="cpModulePillCode"/>
+						<Text text="{chat>/moduleInfo/name}" class="cpModulePillName"/>
+						<Button
+							icon="sap-icon://decline"
+							type="Transparent"
+							class="cpModulePillClose"
+							tooltip="{i18n>moduleLeave}"
+							press=".onLeaveModule"/>
+					</HBox>
 					<HBox class="cpStatusPill" alignItems="Center" renderType="Bare">
 						<customData>
 							<core:CustomData key="state" value="{app>/backend/state}" writeToDom="true"/>
@@ -32,9 +43,17 @@
 						<!-- Welcome screen -->
 						<VBox class="cpWelcome" renderType="Bare" visible="{= ${chat>/messages}.length === 0 &amp;&amp; !${chat>/loading} }">
 							<Image src="img/logo.svg" width="3.5rem" height="3.5rem" decorative="true" class="cpWelcomeLogo"/>
-							<Text text="{i18n>welcomeEyebrow}" class="cpEyebrow"/>
-							<Title text="{i18n>welcomeTitle}" level="H1" wrapping="true" class="cpWelcomeTitle"/>
-							<Text text="{i18n>welcomeText}" class="cpWelcomeText"/>
+							<Text
+								text="{= ${chat>/moduleInfo} ? ${chat>/moduleInfo/code} + ' · ' + ${i18n>navModules} : ${i18n>welcomeEyebrow} }"
+								class="cpEyebrow"/>
+							<Title
+								text="{= ${chat>/moduleInfo} ? ${chat>/moduleInfo/name} : ${i18n>welcomeTitle} }"
+								level="H1"
+								wrapping="true"
+								class="cpWelcomeTitle"/>
+							<Text
+								text="{parts: ['chat>/moduleInfo/description', 'i18n>welcomeText'], formatter: '.formatWelcomeText'}"
+								class="cpWelcomeText"/>
 							<List
 								id="suggestions"
 								class="cpSuggestions"

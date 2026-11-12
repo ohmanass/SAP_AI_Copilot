@@ -7,10 +7,11 @@ class SAPRetriever:
     def __init__(self):
         self.store = SAPVectorStore()
 
-    def retrieve(self, query, n_results=3):
+    def retrieve(self, query, n_results=3, where=None):
         results = self.store.search(
             query=query,
-            n_results=n_results
+            n_results=n_results,
+            where=where
         )
 
         retrieved_documents = []

@@ -1330,6 +1330,175 @@ html, body.cpBody {
 	background: var(--cp-surface);
 }
 
+/* ---------- Modules ---------- */
+.cpModuleGrid.sapMFlexBox {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));
+	gap: 1rem;
+}
+
+.cpModuleCard {
+	position: relative;
+	overflow: hidden;
+	transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.cpModuleCard::before {
+	content: "";
+	position: absolute;
+	inset: 0 0 auto 0;
+	height: 3px;
+	background: var(--cp-grad);
+	opacity: 0.75;
+}
+
+.cpModuleCard[data-status="documentation"]::before,
+.cpModuleCard[data-status="demo"]::before {
+	background: linear-gradient(90deg, #6366f1, #a78bfa);
+}
+
+.cpModuleCard[data-status="planned"]::before {
+	background: rgba(148, 163, 184, 0.35);
+}
+
+.cpModuleCard[data-status="planned"] {
+	opacity: 0.7;
+}
+
+.cpModuleCard:not([data-status="planned"]):hover {
+	border-color: rgba(59, 130, 246, 0.4);
+	transform: translateY(-2px);
+}
+
+.cpModuleHead {
+	display: flex;
+	gap: 0.875rem;
+}
+
+.cpModuleIcon.sapUiIcon {
+	flex: none;
+	width: 2.75rem;
+	height: 2.75rem;
+	line-height: 2.75rem;
+	border-radius: 12px;
+	background: rgba(59, 130, 246, 0.12);
+	font-size: 1.25rem;
+	text-align: center;
+	color: #60a5fa;
+}
+
+.cpModuleTitleBox {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.cpModuleCode.sapMText {
+	font-size: 0.6875rem;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	color: var(--cp-cyan);
+}
+
+.cpModuleFacts {
+	display: flex;
+	flex-direction: column;
+}
+
+.cpModuleActions {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: auto;
+	padding-top: 0.25rem;
+}
+
+.cpModuleOpen .sapMBtnInner {
+	border: none;
+	border-radius: 10px;
+	background: var(--cp-grad);
+}
+
+.cpModuleOpen .sapMBtnInner.sapMBtnHoverable:hover {
+	background: var(--cp-grad);
+	filter: brightness(1.08);
+}
+
+.cpModuleOpen .sapMBtnInner .sapMBtnIcon,
+.cpModuleOpen .sapMBtnInner bdi {
+	color: #ffffff;
+	font-weight: 600;
+}
+
+.cpModuleOpen.sapMBtnDisabled .sapMBtnInner {
+	background: rgba(148, 163, 184, 0.12);
+}
+
+.cpModuleOpen.sapMBtnDisabled .sapMBtnInner .sapMBtnIcon,
+.cpModuleOpen.sapMBtnDisabled .sapMBtnInner bdi {
+	color: var(--cp-muted);
+}
+
+/* Module pill in the chat top bar */
+.cpModulePill {
+	display: flex;
+	flex: none;
+	gap: 0.4375rem;
+	padding: 0.1875rem 0.25rem 0.1875rem 0.75rem;
+	border: 1px solid rgba(34, 211, 238, 0.3);
+	border-radius: 999px;
+	background: rgba(34, 211, 238, 0.08);
+}
+
+.cpModulePillIcon.sapUiIcon {
+	font-size: 0.875rem;
+	color: var(--cp-cyan);
+}
+
+.cpModulePillCode.sapMText {
+	font-size: 0.75rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	color: var(--cp-cyan-soft);
+}
+
+.cpModulePillName.sapMText {
+	font-size: 0.75rem;
+	color: var(--cp-text-2);
+}
+
+.cpModulePillClose.sapMBtn {
+	height: 1.5rem;
+}
+
+/* Module tag in the conversation history */
+.cpHistoryMetaRow {
+	display: flex;
+	gap: 0.375rem;
+	margin-top: 0.125rem;
+}
+
+.cpModuleTag.sapMText {
+	padding: 0 0.3125rem;
+	border-radius: 4px;
+	background: rgba(34, 211, 238, 0.12);
+	font-size: 0.625rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	line-height: 1rem;
+	color: var(--cp-cyan-soft);
+}
+
+.cpHistoryMetaRow .cpHistoryMeta.sapMText {
+	margin-top: 0;
+}
+
+@media (max-width: 640px) {
+	.cpModulePillName.sapMText {
+		display: none;
+	}
+}
+
 /* ---------- Scrollbars ---------- */
 .cpShell * {
 	scrollbar-width: thin;

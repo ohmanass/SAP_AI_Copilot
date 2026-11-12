@@ -1,10 +1,9 @@
-Sécurisation du backend sur BTP et documentation du déploiement
+Ajout de l'onglet Modules : espaces de travail par module SAP
 
-- Validation du jeton XSUAA (sap-xssec) sur toutes les routes /api,
-  sauf /api/health ; inactive en local
-- Backend lié au service XSUAA, avec une route publique stable
-  (remplace la route interne et la règle réseau, non autorisées dans l'org)
-- Passage des applications sur la pile cflinuxfs5
-- Vérification automatique en fin de déploiement : 401 attendu sans jeton
-- README : section « Déploiement sur SAP BTP » (architecture, prérequis,
-  déploiement, vérification, suppression, points d'attention)
+- Registre des modules (MM connecté, ABAP documentation, SD et FI prévus)
+  et endpoint GET /api/modules
+- Agent cadré par module : outils autorisés, consignes du prompt,
+  recherche documentaire filtrée sur les documents du module
+- Une conversation garde son module (migration additive de l'historique)
+- Page Modules, espace de travail dans le chat (pastille, accueil et
+  suggestions du module), étiquette du module dans l'historique

@@ -35,8 +35,12 @@ sap.ui.define([
 				model: { chat: "", provider: "", dataSource: "" },
 				conversations: [],
 				conversationsError: false,
-				user: null
+				user: null,
+				modules: [],
+				modulesError: false
 			}), "app");
+
+			this.refreshModules();
 
 			this._loadCurrentUser();
 
@@ -105,6 +109,23 @@ sap.ui.define([
 			} catch (error) {
 				// Not behind the approuter: keep the local profile
 			}
+		},
+
+		/** Module workspaces, as described by the backend (status, tools, documents). */
+		async refreshModules() {
+			const appModel = this.getModel("app");
+			try {
+				const result = await this._service.getModules();
+				appModel.setProperty("/modules", result.modules);
+				appModel.setProperty("/modulesError", false);
+			} catch (error) {
+				appModel.setProperty("/modulesError", true);
+			}
+			return appModel.getProperty("/modules");
+		},
+
+		getModuleInfo(key) {
+			return (this.getModel("app").getProperty("/modules") || []).find((module) => module.key === key) || null;
 		},
 
 		async refreshConversations() {

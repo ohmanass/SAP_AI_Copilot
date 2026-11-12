@@ -65,6 +65,27 @@ def _indexed_chunks_by_source():
     return counts, collection.count()
 
 
+def get_modules():
+    """Module workspaces with live documentation counts and data source."""
+
+    from app.modules import describe_modules
+
+    try:
+        indexed, _ = _indexed_chunks_by_source()
+    except Exception:
+        indexed = {}
+
+    source = get_data_source()
+    modules = describe_modules(indexed)
+    for module in modules:
+        if module["status"] == "connected":
+            # Transactional modules read the configured SAP data source
+            module["data_source"] = source.label
+            if source.key != "odata":
+                module["status"] = "demo"
+    return modules
+
+
 def get_knowledge_base():
 
     vector_store = {

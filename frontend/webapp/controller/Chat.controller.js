@@ -32,14 +32,18 @@ sap.ui.define([
 				activity: "",
 				loading: false,
 				draft: "",
+				// Module workspace (null = general assistant)
+				module: null,
+				moduleInfo: null,
 				suggestions: this._buildSuggestions()
 			}), "chat");
 
 			const router = this.getRouter();
 			router.getRoute("chat").attachPatternMatched(this._onNewChatRoute, this);
 			router.getRoute("conversation").attachPatternMatched(this._onConversationRoute, this);
+			router.getRoute("moduleChat").attachPatternMatched(this._onModuleChatRoute, this);
 
-			EventBus.getInstance().subscribe("copilot", "newChat", this._startNewConversation, this);
+			EventBus.getInstance().subscribe("copilot", "newChat", this._onNewChatEvent, this);
 
 			// Enter sends, Shift + Enter inserts a line break
 			this.byId("input").attachBrowserEvent("keydown", this._onInputKeyDown, this);
@@ -51,32 +55,74 @@ sap.ui.define([
 		},
 
 		onExit() {
-			EventBus.getInstance().unsubscribe("copilot", "newChat", this._startNewConversation, this);
+			EventBus.getInstance().unsubscribe("copilot", "newChat", this._onNewChatEvent, this);
 		},
 
 		/* =========================== Routing =========================== */
 
+		_onNewChatEvent() {
+			this._startNewConversation(null);
+		},
+
 		_onNewChatRoute() {
 			this.setSection("chat");
-			// A new, unsaved chat (possibly still generating) is kept when coming back
-			// from another page; "New chat" resets explicitly through the event bus.
-			if (this._chat().getProperty("/sessionId") !== null) {
-				this._startNewConversation();
+			// A new, unsaved general chat (possibly still generating) is kept when coming
+			// back from another page; "New chat" resets explicitly through the event bus.
+			if (this._chat().getProperty("/sessionId") !== null || this._chat().getProperty("/module")) {
+				this._startNewConversation(null);
 			} else {
 				this._focusInput();
 			}
 		},
 
+		async _onModuleChatRoute(event) {
+			this.setSection("modules");
+			const key = event.getParameter("arguments").module;
+			const chat = this._chat();
+
+			// Coming back to the module workspace that is already open and unsaved
+			if (chat.getProperty("/module") === key && chat.getProperty("/sessionId") === null) {
+				this._focusInput();
+				return;
+			}
+
+			const component = this.getOwnerComponent();
+			const info = component.getModuleInfo(key) ||
+				(await component.refreshModules(), component.getModuleInfo(key));
+
+			if (!info || info.status === "planned") {
+				MessageToast.show(this.getText("modulesLoadError"));
+				this.getRouter().navTo("modules", {}, true);
+				return;
+			}
+			this._startNewConversation(key);
+		},
+
 		_onConversationRoute(event) {
-			this.setSection("chat");
 			const sessionId = event.getParameter("arguments").sessionId;
 
 			// Already displayed (e.g. right after the first answer of a new chat)
 			if (this._chat().getProperty("/sessionId") === sessionId) {
+				this.setSection(this._chat().getProperty("/module") ? "modules" : "chat");
 				this.getModel("app").setProperty("/activeSessionId", sessionId);
 				return;
 			}
+			this.setSection("chat");
 			this._loadConversation(sessionId);
+		},
+
+		/** Scope the chat to a module workspace (or the general assistant when key is null). */
+		_applyModule(key) {
+			const chat = this._chat();
+			const info = key ? this.getOwnerComponent().getModuleInfo(key) : null;
+			chat.setProperty("/module", key || null);
+			chat.setProperty("/moduleInfo", info);
+			chat.setProperty("/suggestions", info && info.suggestions.length ? info.suggestions : this._buildSuggestions());
+		},
+
+		onLeaveModule() {
+			EventBus.getInstance().publish("copilot", "newChat");
+			this.getRouter().navTo("chat");
 		},
 
 		/** Leaves the conversation being displayed (a running request keeps going server-side). */
@@ -88,10 +134,11 @@ sap.ui.define([
 			chat.setProperty("/activity", "");
 		},
 
-		_startNewConversation() {
+		_startNewConversation(moduleKey) {
 			this._conversationKey++;
 			this._detachStream();
 			const chat = this._chat();
+			this._applyModule(moduleKey);
 			chat.setProperty("/sessionId", null);
 			chat.setProperty("/title", this.getText("newConversationTitle"));
 			chat.setProperty("/messages", []);
@@ -118,6 +165,14 @@ sap.ui.define([
 				if (key !== this._conversationKey) {
 					return;
 				}
+				if (conversation.module && !this.getOwnerComponent().getModuleInfo(conversation.module)) {
+					await this.getOwnerComponent().refreshModules();
+				}
+				if (key !== this._conversationKey) {
+					return;
+				}
+				this._applyModule(conversation.module);
+				this.setSection(conversation.module ? "modules" : "chat");
 				chat.setProperty("/title", conversation.title);
 				chat.setProperty("/messages", conversation.messages.map((m) => this._toMessage(m)));
 			} catch (error) {
@@ -205,6 +260,7 @@ sap.ui.define([
 				key: this._conversationKey,
 				text,
 				sessionId: chat.getProperty("/sessionId"),
+				module: chat.getProperty("/module"),
 				index: -1,
 				received: "",
 				shown: 0,
@@ -223,13 +279,15 @@ sap.ui.define([
 
 			try {
 				try {
-					await this.getService().chatStream(text, stream.sessionId, onEvent, this._abortController.signal);
+					await this.getService().chatStream(
+						text, stream.sessionId, onEvent, this._abortController.signal, stream.module
+					);
 				} catch (error) {
 					if (error.kind !== "http" || ![404, 405].includes(error.status)) {
 						throw error;
 					}
 					// Older backend without /api/chat/stream
-					const result = await this.getService().chat(text, stream.sessionId);
+					const result = await this.getService().chat(text, stream.sessionId, stream.module);
 					onEvent({ type: "token", content: result.response });
 					onEvent(Object.assign({ type: "done" }, result));
 				}
@@ -432,6 +490,10 @@ sap.ui.define([
 			const popover = await this._sourcePopover;
 			popover.setBindingContext(button.getBindingContext("chat"), "chat");
 			popover.openBy(button);
+		},
+
+		formatWelcomeText(moduleDescription, defaultText) {
+			return moduleDescription ? this.getText("moduleWelcomeText", [moduleDescription]) : defaultText;
 		},
 
 		formatSourceChunk(chunk) {

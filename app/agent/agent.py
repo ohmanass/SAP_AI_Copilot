@@ -142,9 +142,16 @@ MAX_ROUNDS_MESSAGE = "Maximum number of tool-calling rounds reached."
 
 class SAPAgent:
 
-    def __init__(self):
+    def __init__(self, module=None):
 
         self.llm = LLMClient()
+
+        # Optional module workspace (app.modules.Module): restricts tools and documents
+        self.module = module
+        self.tools = (
+            [tool for tool in TOOLS if tool["function"]["name"] in module.tools]
+            if module else TOOLS
+        )
 
         self.messages = [
             {
@@ -217,10 +224,28 @@ class SAPAgent:
             }
         ]
 
+        if module:
+            available = ", ".join(module.tools)
+            self.messages[0]["content"] += (
+                f"\n\nWORKSPACE: SAP {module.code} - {module.name}.\n"
+                f"{module.instructions}\n"
+                f"Only these tools are available in this workspace: {available}. "
+                "Ignore the other tools listed above."
+            )
+
     def execute_tool(self, tool_name, arguments):
 
         if tool_name not in TOOL_REGISTRY:
             raise ValueError(f"Unknown tool: {tool_name}")
+
+        if self.module and tool_name not in self.module.tools:
+            raise ValueError(f"Tool {tool_name} is not available in the {self.module.code} workspace")
+
+        # Restrict the documentation search to the module's documents.
+        # Set here, never taken from the model's arguments.
+        arguments = {k: v for k, v in arguments.items() if k != "sources"}
+        if tool_name == "search_sap_documentation" and self.module and self.module.doc_sources:
+            arguments["sources"] = list(self.module.doc_sources)
 
         function = TOOL_REGISTRY[tool_name]
 
@@ -310,7 +335,7 @@ class SAPAgent:
 
             response = self.llm.generate_completion(
                 messages=self.messages,
-                tools=TOOLS
+                tools=self.tools
             )
 
             message = response.choices[0].message
@@ -433,7 +458,7 @@ class SAPAgent:
 
                 stream = self.llm.generate_completion(
                     messages=self.messages,
-                    tools=TOOLS,
+                    tools=self.tools,
                     stream=True
                 )
 

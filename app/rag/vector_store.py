@@ -44,12 +44,17 @@ class SAPVectorStore:
             metadatas=[metadata or {"source": "unknown"}]
         )
 
-    def search(self, query, n_results=3):
+    def search(self, query, n_results=3, where=None):
         query_vector = self.generate_embedding(query)
 
-        results = self.collection.query(
-            query_embeddings=[query_vector],
-            n_results=n_results
-        )
+        parameters = {
+            "query_embeddings": [query_vector],
+            "n_results": n_results
+        }
+        # Optional metadata filter, e.g. {"source": {"$in": ["sap_mm.txt"]}}
+        if where:
+            parameters["where"] = where
+
+        results = self.collection.query(**parameters)
 
         return results

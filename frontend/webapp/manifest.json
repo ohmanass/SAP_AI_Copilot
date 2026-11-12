@@ -97,6 +97,16 @@
 					"target": "chat"
 				},
 				{
+					"name": "modules",
+					"pattern": "modules",
+					"target": "modules"
+				},
+				{
+					"name": "moduleChat",
+					"pattern": "modules/{module}",
+					"target": "chat"
+				},
+				{
 					"name": "knowledgeBase",
 					"pattern": "knowledge-base",
 					"target": "knowledgeBase"
@@ -111,6 +121,11 @@
 				"chat": {
 					"id": "chat",
 					"name": "Chat",
+					"level": 1
+				},
+				"modules": {
+					"id": "modules",
+					"name": "Modules",
 					"level": 1
 				},
 				"knowledgeBase": {

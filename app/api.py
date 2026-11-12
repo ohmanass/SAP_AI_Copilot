@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from app import auth, system_info
 from app.agent.agent import SAPAgent
+from app.modules import get_module
 from app.storage import chat_store
 
 
@@ -51,6 +52,8 @@ registry_lock = threading.Lock()
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
     session_id: str | None = Field(default=None, max_length=100)
+    # Module workspace for a new conversation (ignored for an existing one)
+    module: str | None = Field(default=None, max_length=20)
 
 
 class Source(BaseModel):
@@ -66,16 +69,21 @@ class ChatResponse(BaseModel):
     # Additive fields: existing clients can ignore them
     sources: list[Source] = []
     tools_used: list[str] = []
+    module: str | None = None
 
 
-def get_session(session_id: str):
-    """Return (agent, lock) for a session, restoring its history if persisted."""
+def get_session(session_id: str, requested_module: str | None = None):
+    """
+    Return (agent, lock) for a session, restoring its history if persisted.
+    A conversation keeps the module it was created with.
+    """
 
     with registry_lock:
         if session_id not in agents:
-            agent = SAPAgent()
-
             conversation = chat_store.get_conversation(session_id)
+            module_key = conversation["module"] if conversation else requested_module
+            agent = SAPAgent(module=get_module(module_key))
+
             if conversation:
                 agent.restore_history(conversation["messages"])
 
@@ -83,6 +91,10 @@ def get_session(session_id: str):
             session_locks[session_id] = threading.Lock()
 
         return agents[session_id], session_locks[session_id]
+
+
+def module_key(agent):
+    return agent.module.key if agent.module else None
 
 
 @app.get("/api/health")
@@ -99,7 +111,7 @@ def chat(request: ChatRequest):
     session_id = request.session_id or str(uuid4())
 
     try:
-        agent, lock = get_session(session_id)
+        agent, lock = get_session(session_id, request.module)
 
         with lock:
             result = agent.ask_with_details(request.message)
@@ -109,14 +121,16 @@ def chat(request: ChatRequest):
             user_message=request.message,
             assistant_message=result["response"],
             sources=result["sources"],
-            tools_used=result["tools_used"]
+            tools_used=result["tools_used"],
+            module=module_key(agent)
         )
 
         return ChatResponse(
             session_id=session_id,
             response=result["response"],
             sources=result["sources"],
-            tools_used=result["tools_used"]
+            tools_used=result["tools_used"],
+            module=module_key(agent)
         )
 
     except Exception as error:
@@ -140,13 +154,13 @@ def chat_stream(request: ChatRequest):
     """
 
     session_id = request.session_id or str(uuid4())
-    agent, lock = get_session(session_id)
+    agent, lock = get_session(session_id, request.module)
 
     def event_line(event):
         return json.dumps(event, ensure_ascii=False) + "\n"
 
     def generate():
-        yield event_line({"type": "session", "session_id": session_id})
+        yield event_line({"type": "session", "session_id": session_id, "module": module_key(agent)})
 
         with lock:
             try:
@@ -161,9 +175,10 @@ def chat_stream(request: ChatRequest):
                         user_message=request.message,
                         assistant_message=event["response"],
                         sources=event["sources"],
-                        tools_used=event["tools_used"]
+                        tools_used=event["tools_used"],
+                        module=module_key(agent)
                     )
-                    yield event_line({**event, "session_id": session_id})
+                    yield event_line({**event, "session_id": session_id, "module": module_key(agent)})
 
             except Exception:
                 logger.exception("Streaming chat request failed")
@@ -177,6 +192,11 @@ def chat_stream(request: ChatRequest):
         media_type="application/x-ndjson",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
     )
+
+
+@app.get("/api/modules")
+def list_modules():
+    return {"modules": system_info.get_modules()}
 
 
 @app.get("/api/sessions")

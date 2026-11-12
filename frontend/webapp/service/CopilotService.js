@@ -79,12 +79,16 @@ sap.ui.define([
 			});
 		},
 
-		chat(message, sessionId) {
+		chat(message, sessionId, module) {
 			return this._request("chat", {
 				method: "POST",
-				body: { message, session_id: sessionId || null },
+				body: { message, session_id: sessionId || null, module: module || null },
 				timeoutMs: this._chatTimeoutMs
 			});
+		},
+
+		getModules() {
+			return this._request("modules");
 		},
 
 		/**
@@ -92,7 +96,7 @@ sap.ui.define([
 		 * Rejects with kind "aborted" when the caller aborts through `signal`,
 		 * "timeout" when the backend stays silent too long, "stream" on a server-side error.
 		 */
-		async chatStream(message, sessionId, onEvent, signal) {
+		async chatStream(message, sessionId, onEvent, signal, module) {
 			const controller = new AbortController();
 			let timedOut = false;
 			let idleTimer;
@@ -113,7 +117,7 @@ sap.ui.define([
 				const response = await this._fetch(`${this._baseUrl}chat/stream`, {
 					method: "POST",
 					headers: { "Content-Type": "application/json", Accept: "application/x-ndjson" },
-					body: JSON.stringify({ message, session_id: sessionId || null }),
+					body: JSON.stringify({ message, session_id: sessionId || null, module: module || null }),
 					signal: controller.signal
 				});
 

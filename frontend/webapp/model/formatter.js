@@ -16,6 +16,18 @@ sap.ui.define([
 	 */
 	return {
 
+		upper(value) {
+			return value ? String(value).toUpperCase() : "";
+		},
+
+		moduleStatusText(status) {
+			return status ? this.getText(`moduleStatus.${status}`) : "";
+		},
+
+		moduleStatusState(status) {
+			return { connected: "Success", demo: "Information", documentation: "Information", planned: "None" }[status] || "None";
+		},
+
 		relativeTime(value) {
 			const date = toDate(value);
 			return date ? relativeFormat.format(date) : "";

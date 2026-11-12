@@ -70,6 +70,11 @@ def initialize():
     with _connect() as connection:
         connection.executescript(SCHEMA)
 
+        # Additive migration: module workspace of a conversation (NULL = general)
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(conversations)")}
+        if "module" not in columns:
+            connection.execute("ALTER TABLE conversations ADD COLUMN module TEXT")
+
 
 def build_title(message: str) -> str:
     title = " ".join(message.split())
@@ -95,7 +100,8 @@ def save_exchange(
     user_message: str,
     assistant_message: str,
     sources: list,
-    tools_used: list
+    tools_used: list,
+    module: str | None = None
 ):
     """Store one user/assistant exchange, creating the conversation if needed."""
 
@@ -104,11 +110,11 @@ def save_exchange(
     with _connect() as connection:
         connection.execute(
             """
-            INSERT INTO conversations (session_id, title, created_at, updated_at)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO conversations (session_id, title, created_at, updated_at, module)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(session_id) DO UPDATE SET updated_at = excluded.updated_at
             """,
-            (session_id, build_title(user_message), now, now)
+            (session_id, build_title(user_message), now, now, module)
         )
 
         connection.executemany(
@@ -140,6 +146,7 @@ def list_conversations():
                 c.title,
                 c.created_at,
                 c.updated_at,
+                c.module,
                 COUNT(m.message_id) AS message_count
             FROM conversations c
             LEFT JOIN messages m
@@ -156,7 +163,7 @@ def get_conversation(session_id: str):
     with _connect() as connection:
         conversation = connection.execute(
             """
-            SELECT session_id, title, created_at, updated_at
+            SELECT session_id, title, created_at, updated_at, module
             FROM conversations
             WHERE session_id = ?
             """,

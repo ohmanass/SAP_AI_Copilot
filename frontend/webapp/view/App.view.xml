@@ -44,6 +44,7 @@
 						selectedKey="{app>/section}"
 						itemSelect=".onNavSelect">
 						<tnt:NavigationListItem key="chat" text="{i18n>navChat}" icon="sap-icon://discussion-2"/>
+						<tnt:NavigationListItem key="modules" text="{i18n>navModules}" icon="sap-icon://grid"/>
 						<tnt:NavigationListItem key="knowledgeBase" text="{i18n>navKnowledgeBase}" icon="sap-icon://course-book"/>
 						<tnt:NavigationListItem key="settings" text="{i18n>navSettings}" icon="sap-icon://action-settings"/>
 					</tnt:NavigationList>
@@ -65,7 +66,13 @@
 								<HBox class="cpHistoryRow" alignItems="Center" renderType="Bare">
 									<VBox class="cpHistoryText" renderType="Bare">
 										<Text text="{app>title}" tooltip="{app>title}" wrapping="false" class="cpHistoryTitle"/>
-										<Text text="{path: 'app>updated_at', formatter: '.formatter.relativeTime'}" class="cpHistoryMeta"/>
+										<HBox class="cpHistoryMetaRow" alignItems="Center" renderType="Bare">
+											<Text
+												text="{path: 'app>module', formatter: '.formatter.upper'}"
+												visible="{= !!${app>module} }"
+												class="cpModuleTag"/>
+											<Text text="{path: 'app>updated_at', formatter: '.formatter.relativeTime'}" class="cpHistoryMeta"/>
+										</HBox>
 									</VBox>
 									<Button
 										icon="sap-icon://delete"

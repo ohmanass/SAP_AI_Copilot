@@ -1,0 +1,83 @@
+<mvc:View
+	controllerName="com.sapaicopilot.app.controller.Modules"
+	xmlns:mvc="sap.ui.core.mvc"
+	xmlns:core="sap.ui.core"
+	xmlns="sap.m"
+	height="100%">
+
+	<Page id="modulesPage" showHeader="false" backgroundDesign="Transparent" class="cpPage">
+		<VBox class="cpContent" renderType="Bare">
+
+			<HBox class="cpPageHeader" alignItems="Center" renderType="Bare">
+				<Button icon="sap-icon://menu2" type="Transparent" class="cpMenuBtn" tooltip="{i18n>openMenu}" press=".onOpenSidebar"/>
+				<VBox class="cpPageHeaderText" renderType="Bare">
+					<Title text="{i18n>modulesTitle}" level="H1" class="cpPageTitle"/>
+					<Text text="{i18n>modulesSubtitle}" class="cpPageSubtitle"/>
+				</VBox>
+				<Button text="{i18n>refresh}" icon="sap-icon://refresh" class="cpGhostBtn" press=".onRefresh" enabled="{= !${view>/busy} }"/>
+			</HBox>
+
+			<MessageStrip type="Error" showIcon="true" text="{i18n>modulesLoadError}" visible="{app>/modulesError}" class="cpStrip"/>
+
+			<FlexBox
+				id="moduleGrid"
+				class="cpModuleGrid"
+				wrap="Wrap"
+				renderType="Bare"
+				busy="{view>/busy}"
+				busyIndicatorDelay="0"
+				items="{app>/modules}">
+				<items>
+					<VBox class="cpCard cpModuleCard" renderType="Bare">
+						<customData>
+							<core:CustomData key="status" value="{app>status}" writeToDom="true"/>
+						</customData>
+
+						<HBox class="cpModuleHead" alignItems="Center" renderType="Bare">
+							<core:Icon src="{app>icon}" class="cpModuleIcon"/>
+							<VBox class="cpModuleTitleBox" renderType="Bare">
+								<Text text="{app>code}" class="cpModuleCode"/>
+								<Title text="{app>name}" level="H3" wrapping="true" class="cpCardTitle"/>
+							</VBox>
+							<ObjectStatus
+								text="{path: 'app>status', formatter: '.formatter.moduleStatusText'}"
+								state="{path: 'app>status', formatter: '.formatter.moduleStatusState'}"
+								inverted="true"/>
+						</HBox>
+
+						<Text text="{app>description}" class="cpCardText"/>
+
+						<VBox class="cpModuleFacts" renderType="Bare" visible="{= ${app>status} !== 'planned' }">
+							<HBox class="cpRow" renderType="Bare">
+								<Text text="{i18n>moduleTools}" class="cpRowLabel"/>
+								<Text text="{path: 'app>tools', formatter: '.formatTools'}" class="cpRowValue"/>
+							</HBox>
+							<HBox class="cpRow" renderType="Bare">
+								<Text text="{i18n>moduleDocumentation}" class="cpRowLabel"/>
+								<Text text="{path: 'app>documents', formatter: '.formatDocuments'}" class="cpRowValue"/>
+							</HBox>
+							<HBox class="cpRow" renderType="Bare" visible="{= ${app>apis}.length > 0 }">
+								<Text text="{i18n>labelApi}" class="cpRowLabel"/>
+								<Text text="{path: 'app>apis', formatter: '.formatList'}" class="cpRowValue cpMono"/>
+							</HBox>
+							<HBox class="cpRow" renderType="Bare" visible="{= !!${app>data_source} }">
+								<Text text="{i18n>labelDataSource}" class="cpRowLabel"/>
+								<Text text="{app>data_source}" class="cpRowValue"/>
+							</HBox>
+						</VBox>
+
+						<HBox class="cpModuleActions" renderType="Bare">
+							<Button
+								text="{= ${app>status} === 'planned' ? ${i18n>modulePlanned} : ${i18n>moduleOpen} }"
+								icon="{= ${app>status} === 'planned' ? 'sap-icon://pending' : 'sap-icon://navigation-right-arrow' }"
+								iconFirst="false"
+								enabled="{= ${app>status} !== 'planned' }"
+								class="cpModuleOpen"
+								press=".onOpenModule"/>
+						</HBox>
+					</VBox>
+				</items>
+			</FlexBox>
+		</VBox>
+	</Page>
+</mvc:View>
