@@ -25,7 +25,8 @@
       "source": "^/(.*)$",
       "target": "$1",
       "localDir": "webapp",
-      "authenticationType": "xsuaa"
+      "authenticationType": "xsuaa",
+      "cacheControl": "no-cache"
     }
   ]
 }
