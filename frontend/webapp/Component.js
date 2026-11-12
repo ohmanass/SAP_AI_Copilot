@@ -32,7 +32,7 @@ sap.ui.define([
 				sidebarOpen: false,
 				activeSessionId: null,
 				backend: { state: "checking", checkedAt: null },
-				model: { chat: "", provider: "" },
+				model: { chat: "", provider: "", dataSource: "" },
 				conversations: [],
 				conversationsError: false
 			}), "app");
@@ -67,7 +67,8 @@ sap.ui.define([
 					const status = await this._service.getStatus(false);
 					appModel.setProperty("/model", {
 						chat: status.ai.chat_model,
-						provider: status.ai.provider
+						provider: status.ai.provider,
+						dataSource: status.sap_data ? status.sap_data.label : ""
 					});
 					this.refreshConversations();
 				}

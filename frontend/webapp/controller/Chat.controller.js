@@ -10,6 +10,7 @@ sap.ui.define([
 	const TOOL_ICONS = {
 		get_purchase_order: "sap-icon://sales-document",
 		get_overdue_orders: "sap-icon://shipping-status",
+		search_purchase_orders: "sap-icon://search",
 		search_sap_documentation: "sap-icon://course-book"
 	};
 

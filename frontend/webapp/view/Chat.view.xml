@@ -15,7 +15,7 @@
 					<Button icon="sap-icon://menu2" type="Transparent" class="cpMenuBtn" tooltip="{i18n>openMenu}" press=".onOpenSidebar"/>
 					<VBox class="cpTopbarText" renderType="Bare">
 						<Title text="{chat>/title}" level="H2" wrapping="false" class="cpTopbarTitle"/>
-						<Text text="{= ${app>/model/chat} ? ${app>/model/chat} + ' · ' + ${app>/model/provider} : '' }" class="cpTopbarMeta"/>
+						<Text text="{= ${app>/model/chat} ? ${app>/model/chat} + ' · ' + ${app>/model/provider} + (${app>/model/dataSource} ? ' · ' + ${app>/model/dataSource} : '') : '' }" class="cpTopbarMeta"/>
 					</VBox>
 					<HBox class="cpStatusPill" alignItems="Center" renderType="Bare">
 						<customData>

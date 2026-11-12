@@ -72,6 +72,14 @@ sap.ui.define([
 			}
 		},
 
+		formatCount(value) {
+			return typeof value === "number" ? new Intl.NumberFormat().format(value) : "—";
+		},
+
+		formatLatency(value) {
+			return typeof value === "number" ? this.getText("valueLatency", [value]) : "";
+		},
+
 		formatConnection(connection) {
 			if (!connection) {
 				return this.getText("valueNotTested");

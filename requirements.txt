@@ -4,3 +4,4 @@ pytest
 chromadb
 fastapi
 uvicorn[standard]
+httpx

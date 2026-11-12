@@ -1,8 +1,11 @@
 import json
 
 from app.llm.llm_client import LLMClient
-from app.tools.purchase_orders import get_purchase_order
-from app.tools.delivery_analysis import get_overdue_orders
+from app.tools.sap_data_tools import (
+    get_overdue_orders,
+    get_purchase_order,
+    search_purchase_orders
+)
 from app.tools.sap_documentation import search_sap_documentation
 
 # Décrit les fonctions disponibles pour l'agent, y compris leurs paramètres et descriptions.
@@ -35,12 +38,57 @@ TOOLS = [
         "function": {
             "name": "get_overdue_orders",
             "description": (
-                "Retrieve all purchase orders whose delivery "
-                "date has passed and whose status is not RECEIVED."
+                "Retrieve purchase orders whose delivery date has passed "
+                "while quantities are still open (not yet received). "
+                "On large SAP systems, results cover a recent time window "
+                "and are limited; the response states the window and totals."
             ),
             "parameters": {
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "days_back": {
+                        "type": "integer",
+                        "description": "Only consider delivery dates within this many past days (default 30)."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of purchase orders to return (default 10, max 50)."
+                    }
+                },
+                "required": [],
+                "additionalProperties": False
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_purchase_orders",
+            "description": (
+                "Search purchase orders by supplier (name or supplier ID) "
+                "and/or order date range. Returns the most recent matches "
+                "and the total number of matching orders."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "supplier": {
+                        "type": "string",
+                        "description": "Supplier name (partial match) or supplier ID."
+                    },
+                    "date_from": {
+                        "type": "string",
+                        "description": "Earliest order date, format YYYY-MM-DD."
+                    },
+                    "date_to": {
+                        "type": "string",
+                        "description": "Latest order date, format YYYY-MM-DD."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of orders to return (default 10, max 50)."
+                    }
+                },
                 "required": [],
                 "additionalProperties": False
             }
@@ -85,6 +133,7 @@ TOOLS = [
 TOOL_REGISTRY = {
     "get_purchase_order": get_purchase_order,
     "get_overdue_orders": get_overdue_orders,
+    "search_purchase_orders": search_purchase_orders,
     "search_sap_documentation": search_sap_documentation
 }
 
@@ -113,16 +162,31 @@ class SAPAgent:
                     - SAP Fiori
                     - SAP BTP
 
-                    You have access to three tools:
+                    You have access to four tools:
 
                     1. get_purchase_order:
-                    Retrieves transactional purchase order information.
+                    Retrieves a purchase order with its items, delivery dates
+                    and open quantities.
 
                     2. get_overdue_orders:
-                    Retrieves overdue purchase orders.
+                    Retrieves overdue purchase orders (past delivery date,
+                    quantity still open).
 
-                    3. search_sap_documentation:
+                    3. search_purchase_orders:
+                    Finds purchase orders by supplier and/or order date.
+
+                    4. search_sap_documentation:
                     Searches the SAP technical documentation using RAG.
+
+                    Transactional tool results include a "source" field naming
+                    the system the data comes from (an SAP S/4HANA Cloud system
+                    via OData, or a local demo dataset). Mention that source when
+                    presenting transactional data. When a result covers a time
+                    window or is limited, state the window and the totals instead
+                    of implying the list is exhaustive.
+                    Present several purchase orders as one compact Markdown table
+                    (one row per order, only the most useful columns) instead of
+                    long nested lists, then add a short summary.
 
                     TOOL USAGE RULES:
 

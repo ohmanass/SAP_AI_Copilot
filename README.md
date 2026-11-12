@@ -1,6 +1,6 @@
 # SAP AI Copilot
 
-Assistant IA pour SAP MM et le développement ABAP, construit sur **SAP Generative AI Hub** (SAP AI Core). Il combine un agent à **Tool Calling** qui interroge des données d'achat, un pipeline **RAG** sur une documentation technique SAP et une interface **SAPUI5** inspirée de SAP Fiori.
+Assistant IA pour SAP MM et le développement ABAP, construit sur **SAP Generative AI Hub** (SAP AI Core). Il combine un agent à **Tool Calling** qui interroge les commandes d'achat d'un système **SAP S/4HANA Cloud via OData V4**, un pipeline **RAG** sur une documentation technique SAP et une interface **SAPUI5** inspirée de SAP Fiori.
 
 ![Interface de conversation](docs/screenshots/conversation.png)
 
@@ -9,7 +9,8 @@ Assistant IA pour SAP MM et le développement ABAP, construit sur **SAP Generati
 ### Agent IA
 
 - GPT-4o-mini via SAP Generative AI Hub (SDK `sap-ai-sdk-gen`)
-- Tool Calling avec trois outils : consultation d'une commande d'achat, analyse des retards de livraison, recherche dans la documentation
+- Tool Calling avec quatre outils : consultation d'une commande d'achat (postes, échéances, quantités ouvertes), analyse des retards de livraison, recherche de commandes par fournisseur ou par date, recherche dans la documentation
+- Données transactionnelles lues dans **SAP S/4HANA Cloud** via l'API officielle `API_PURCHASEORDER_2` (OData V4), ou dans une base SQLite de démonstration utilisable hors ligne
 - RAG sur ChromaDB avec les embeddings `text-embedding-3-large`
 - Réponses fondées sur les données et les documents récupérés, avec citation des sources
 
@@ -43,8 +44,10 @@ Backend FastAPI (port 8000)
         ▼
 Agent SAP (Tool Calling)
         ├── SAP Generative AI Hub ── GPT-4o-mini, text-embedding-3-large
-        ├── get_purchase_order        ─┐
-        ├── get_overdue_orders         ├── SQLite (données SAP MM fictives)
+        ├── get_purchase_order       ─┐
+        ├── get_overdue_orders        ├── Source de données SAP (SAP_DATA_SOURCE)
+        ├── search_purchase_orders   ─┘     ├── odata  : SAP S/4HANA Cloud, API_PURCHASEORDER_2 (OData V4)
+        │                                   └── sqlite : base de démonstration locale
         └── search_sap_documentation ── RAG / ChromaDB
 ```
 
@@ -56,6 +59,7 @@ SAP_AI_Copilot/
 │   ├── agent/agent.py      # Agent à Tool Calling
 │   ├── llm/                # Client SAP Generative AI Hub
 │   ├── tools/              # Outils appelés par l'agent
+│   ├── sap_data/           # Sources de données SAP : client OData V4 S/4HANA, SQLite
 │   ├── rag/                # Découpage, indexation, recherche (ChromaDB)
 │   ├── database/           # Schéma et jeu de données SQLite
 │   └── storage/            # Persistance de l'historique des conversations
@@ -115,6 +119,31 @@ Exemple de flux renvoyé par `/api/chat/stream` (une ligne JSON par événement)
 
 La documentation interactive de l'API est disponible sur `http://127.0.0.1:8000/docs`.
 
+## Connexion à SAP S/4HANA Cloud
+
+Les outils transactionnels lisent les commandes d'achat via l'API officielle **Purchase Order (OData V4)**, service `API_PURCHASEORDER_2`, en lecture seule. Par défaut, ils interrogent le **sandbox du SAP Business Accelerator Hub** : un système S/4HANA Cloud de démonstration avec plus de 200 000 commandes.
+
+| Besoin | Entité OData |
+| --- | --- |
+| En-tête de commande | `PurchaseOrder` |
+| Nom du fournisseur | `_SupplierAddress/OrganizationName1` |
+| Postes (article, quantité, prix) | `_PurchaseOrderItem` |
+| Dates de livraison et quantités ouvertes | `_PurchaseOrderScheduleLineTP` / `PurchaseOrderScheduleLine` |
+
+Une commande est considérée **en retard** lorsqu'une échéance a une date de livraison dépassée et une quantité encore ouverte (`OpenPurchaseOrderQuantity > 0`). OData V4 impose de filtrer une quantité avec son unité : les unités contrôlées sont configurables (`SAP_QUANTITY_UNITS`, par défaut `PC,EA`). Sur un système de cette taille, l'analyse porte sur une fenêtre de temps récente, et l'agent indique toujours la fenêtre et les totaux.
+
+### Configuration
+
+1. Se connecter sur [api.sap.com](https://api.sap.com), ouvrir l'API [Purchase Order (OData V4)](https://api.sap.com/api/CE_PURCHASEORDER_0001/overview) et cliquer sur **Show API Key**.
+2. Dans `.env` :
+
+```env
+SAP_DATA_SOURCE=odata
+SAP_API_KEY=<votre clé>
+```
+
+Avec `SAP_DATA_SOURCE=sqlite` (valeur par défaut), l'application utilise la base de démonstration locale et fonctionne sans réseau. `SAP_API_BASE_URL` permet de viser un autre système S/4HANA Cloud qui expose la même API.
+
 ## Installation
 
 ### Prérequis
@@ -133,7 +162,7 @@ pip install -r requirements.txt
 # Identifiants SAP AI Core : copier le modèle puis le compléter
 Copy-Item .env.example .env
 
-# Données SAP MM fictives (SQLite)
+# Données SAP MM fictives (SQLite), utilisées si SAP_DATA_SOURCE=sqlite
 python -m app.database.seed
 
 # Indexation de la documentation dans ChromaDB (appelle le modèle d'embeddings)
@@ -165,22 +194,25 @@ L'application s'ouvre sur `http://localhost:8080/index.html`.
 
 ## Sécurité
 
-- Les identifiants SAP AI Core restent côté serveur dans `.env`, exclu du dépôt.
+- Les identifiants SAP AI Core et la clé API S/4HANA restent côté serveur dans `.env`, exclu du dépôt.
+- L'accès à S/4HANA est en lecture seule (requêtes GET uniquement).
 - Le navigateur ne reçoit que des noms de modèles, des compteurs et des indicateurs de statut.
 - Les réponses du modèle sont échappées avant le rendu Markdown, puis nettoyées par le sanitizer HTML de SAPUI5.
 - CORS limité à `localhost:8080`.
 
 ## Données
 
-Les commandes d'achat, fournisseurs et articles de la base SQLite sont **fictifs**. Ils sont générés par `app/database/seed.py` à des fins de démonstration. Les documents de `data/documents` servent de base documentaire au RAG.
+- **Mode `odata`** : les données viennent du sandbox SAP S/4HANA Cloud, un système de démonstration fourni par SAP. Elles sont fictives côté entreprise mais produites par un vrai système S/4HANA.
+- **Mode `sqlite`** : les commandes d'achat, fournisseurs et articles sont **fictifs**, générés par `app/database/seed.py`.
+
+Les documents de `data/documents` servent de base documentaire au RAG.
 
 ## Pistes d'évolution
 
 - Affichage des données SAP sous forme de tableaux Fiori
 - Import et ré-indexation de documents depuis l'interface
-- Connexion à une API OData S/4HANA à la place de SQLite
-- Déploiement sur SAP BTP (Cloud Foundry, XSUAA)
+- Déploiement sur SAP BTP (Cloud Foundry, XSUAA, Destination service à la place de la clé API)
 
 ## Stack technique
 
-SAPUI5 1.136 · UI5 Tooling 4 · FastAPI · SAP Generative AI Hub · SAP AI SDK · ChromaDB · SQLite · Python 3.12
+SAPUI5 1.136 · UI5 Tooling 4 · FastAPI · SAP Generative AI Hub · SAP AI SDK · SAP S/4HANA Cloud OData V4 · ChromaDB · SQLite · Python 3.12

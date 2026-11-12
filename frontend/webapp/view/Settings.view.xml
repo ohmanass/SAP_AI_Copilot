@@ -122,26 +122,37 @@
 						<Title text="{i18n>cardDatabase}" level="H3" class="cpCardTitle"/>
 					</HBox>
 					<HBox class="cpRow" renderType="Bare">
+						<Text text="{i18n>labelDataSource}" class="cpRowLabel"/>
+						<tnt:InfoLabel text="{= ${settings>/status/sap_data/label} || '—' }" colorScheme="6" class="cpToolLabel"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare">
 						<Text text="{i18n>labelStatus}" class="cpRowLabel"/>
 						<ObjectStatus
 							visible="{= !!${settings>/status} }"
-							text="{path: 'settings>/status/sap_database/available', formatter: '.formatter.availability'}"
-							state="{path: 'settings>/status/sap_database/available', formatter: '.formatter.availabilityState'}"
+							text="{path: 'settings>/status/sap_data/available', formatter: '.formatter.availability'}"
+							state="{path: 'settings>/status/sap_data/available', formatter: '.formatter.availabilityState'}"
+							tooltip="{settings>/status/sap_data/error}"
 							inverted="true"/>
 					</HBox>
 					<HBox class="cpRow" renderType="Bare">
-						<Text text="{i18n>labelSuppliers}" class="cpRowLabel"/>
-						<Text text="{= ${settings>/status/sap_database/available} ? String(${settings>/status/sap_database/tables/suppliers}) : '—' }" class="cpRowValue"/>
+						<Text text="{i18n>labelSystem}" class="cpRowLabel"/>
+						<Text text="{= ${settings>/status/sap_data/system} || '—' }" class="cpRowValue cpMono"/>
+					</HBox>
+					<HBox class="cpRow" renderType="Bare" visible="{= !!${settings>/status/sap_data/api} }">
+						<Text text="{i18n>labelApi}" class="cpRowLabel"/>
+						<Text text="{settings>/status/sap_data/api}" class="cpRowValue cpMono"/>
 					</HBox>
 					<HBox class="cpRow" renderType="Bare">
 						<Text text="{i18n>labelPurchaseOrders}" class="cpRowLabel"/>
-						<Text text="{= ${settings>/status/sap_database/available} ? String(${settings>/status/sap_database/tables/purchase_orders}) : '—' }" class="cpRowValue"/>
+						<Text text="{path: 'settings>/status/sap_data/purchase_orders', formatter: '.formatCount'}" class="cpRowValue"/>
 					</HBox>
-					<HBox class="cpRow" renderType="Bare">
-						<Text text="{i18n>labelItems}" class="cpRowLabel"/>
-						<Text text="{= ${settings>/status/sap_database/available} ? String(${settings>/status/sap_database/tables/purchase_order_items}) : '—' }" class="cpRowValue"/>
+					<HBox class="cpRow" renderType="Bare" visible="{= !!${settings>/status/sap_data/latency_ms} }">
+						<Text text="{i18n>labelLatency}" class="cpRowLabel"/>
+						<Text text="{path: 'settings>/status/sap_data/latency_ms', formatter: '.formatLatency'}" class="cpRowValue"/>
 					</HBox>
-					<Text text="{i18n>databaseNote}" class="cpCardNote"/>
+					<Text
+						text="{= ${settings>/status/sap_data/key} === 'odata' ? ${i18n>dataSourceNoteOdata} : ${i18n>dataSourceNoteSqlite} }"
+						class="cpCardNote"/>
 				</VBox>
 
 				<!-- Frontend -->

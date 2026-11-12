@@ -769,6 +769,16 @@ html, body.cpBody {
 	width: 100%;
 	border-collapse: collapse;
 	font-size: 0.875rem;
+	overflow-wrap: normal;
+	word-break: normal;
+}
+
+.cpMarkdown th {
+	white-space: nowrap;
+}
+
+.cpMarkdown td {
+	min-width: 4.5rem;
 }
 
 .cpMarkdown th {
