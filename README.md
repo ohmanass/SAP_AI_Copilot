@@ -14,7 +14,7 @@ L'application fonctionne en local et se déploie sur **SAP BTP (Cloud Foundry)**
 - Tool Calling avec sept outils :
   - **Achats (MM)** : consultation d'une commande d'achat (postes, échéances, quantités ouvertes), analyse des retards de livraison, recherche par fournisseur ou par date
   - **Ventes (SD)** : consultation d'une commande client (client, statuts, postes, dates confirmées), recherche par client ou par date, commandes clients en retard de livraison
-  - **Documentation** : recherche RAG
+  - **Documentation** : recherche RAG dans la documentation du module (MM, SD ou ABAP)
 - Données transactionnelles lues dans **SAP S/4HANA Cloud** via les API officielles `API_PURCHASEORDER_2` et `API_SALESORDER` (OData V4), ou dans une base SQLite de démonstration (achats uniquement) utilisable hors ligne
 - **Espaces de travail par module** (MM, SD, ABAP) : l'agent n'utilise que les outils et la documentation du module choisi
 - RAG sur ChromaDB avec les embeddings `text-embedding-3-large`
@@ -310,7 +310,6 @@ Les documents de `data/documents` servent de base documentaire au RAG.
 ## Pistes d'évolution
 
 - Module **FI** : factures fournisseurs et rapprochement commande / réception / facture
-- Documentation RAG propre au module SD
 - Affichage des données SAP sous forme de tableaux Fiori
 - Import et ré-indexation de documents depuis l'interface
 - Historique persistant sur SAP BTP (SAP HANA Cloud ou PostgreSQL)

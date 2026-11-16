@@ -94,15 +94,17 @@ MODULES = (
         description="Customer sales orders: customers, items, delivery status and late deliveries.",
         status="connected",
         icon="sap-icon://sales-order",
-        tools=("get_sales_order", "search_sales_orders", "get_late_sales_orders"),
+        tools=("get_sales_order", "search_sales_orders", "get_late_sales_orders", DOCUMENTATION_TOOL),
+        doc_sources=("sap_sd.txt",),
         apis=("API_SALESORDER (OData V4)",),
         instructions=(
             "You are working in the SAP SD (Sales and Distribution) workspace. "
             "Focus on customer sales orders: customers, items, requested and "
             "confirmed delivery dates, delivery and processing status. "
-            "Use the sales order tools for every factual answer. There is no SD "
-            "documentation in this workspace: for SAP concepts, answer briefly "
-            "and say it is general knowledge, not retrieved documentation. "
+            "Use the sales order tools for transactional questions and the "
+            "documentation for SD concepts (tables, statuses, partner functions, "
+            "order-to-cash process). Use both when the user asks to explain a "
+            "sales order value, for example a status code. "
             "Purchase orders and suppliers belong to the MM workspace: if the user "
             "asks about them, do not call any tool, say so and suggest the MM workspace."
         ),
@@ -110,7 +112,7 @@ MODULES = (
             ("Show late sales orders.", "Late deliveries", "sap-icon://past"),
             ("Analyse sales order 538239.", "Sales order lookup", "sap-icon://sales-order"),
             ("Find the latest sales orders for US Large Cycles 2.", "Sales order search", "sap-icon://search"),
-            ("List this month's sales orders for LA Specialty Cycles 3.", "Sales order search", "sap-icon://calendar")
+            ("Explain the difference between VBAK, VBAP and VBEP.", "Documentation", "sap-icon://course-book")
         ),
         requires_s4hana=True
     ),

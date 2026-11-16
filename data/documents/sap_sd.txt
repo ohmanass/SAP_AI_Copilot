@@ -1,0 +1,134 @@
+SAP SD - SALES ORDER MANAGEMENT
+
+1. Overview
+
+SAP Sales and Distribution (SD) is a module used to manage the order-to-cash process: customer inquiries and quotations, sales orders, outbound deliveries, billing and the handover to financial accounting.
+
+2. Order-to-Cash Process
+
+The sales process generally follows these steps:
+
+1. Create an inquiry or a quotation (optional).
+2. Create a sales order.
+3. Check availability and confirm delivery dates.
+4. Create the outbound delivery.
+5. Pick, pack and post the goods issue.
+6. Create the billing document (customer invoice).
+7. Post the incoming payment in financial accounting.
+
+3. Sales Order Structure
+
+A sales order is a contract between a company and a customer for the delivery of goods or services at agreed prices, quantities and dates.
+
+In SAP, sales orders are represented by these main database tables:
+
+- VBAK: stores sales document header information.
+- VBAP: stores sales document item information.
+- VBEP: stores schedule lines (delivery dates and confirmed quantities).
+- VBPA: stores the business partners of the document.
+
+4. VBAK Table
+
+VBAK contains general information about a sales order.
+
+Important fields:
+- VBELN: Sales Document Number.
+- AUART: Sales Document Type.
+- KUNNR: Sold-to Party.
+- VKORG: Sales Organization.
+- VTWEG: Distribution Channel.
+- SPART: Division.
+- AUDAT: Document Date.
+- VDATU: Requested Delivery Date.
+- BSTNK: Customer Purchase Order Number.
+- NETWR: Net Value of the Sales Order.
+- WAERK: Document Currency.
+
+5. VBAP Table
+
+VBAP contains the details of each sales order item.
+
+Important fields:
+- VBELN: Sales Document Number.
+- POSNR: Sales Document Item.
+- MATNR: Material Number.
+- ARKTX: Item Description.
+- KWMENG: Order Quantity.
+- VRKME: Sales Unit.
+- NETWR: Net Value of the Item.
+- ABGRU: Reason for Rejection.
+
+6. VBEP Table - Schedule Lines
+
+Each sales order item has one or more schedule lines. A schedule line splits the item quantity by delivery date.
+
+Important fields:
+- VBELN: Sales Document Number.
+- POSNR: Sales Document Item.
+- ETENR: Schedule Line Number.
+- EDATU: Schedule Line Date.
+- WMENG: Requested Quantity.
+- BMENG: Confirmed Quantity.
+
+The requested delivery date is the date asked by the customer. The confirmed delivery date is the date the company can commit to after the availability check.
+
+7. Sales Area
+
+Every sales order is assigned to a sales area, the combination of three organizational units:
+
+- Sales Organization: the unit responsible for selling and for the conditions of sale.
+- Distribution Channel: the way products reach the customer, for example direct sales or wholesale.
+- Division: a product line or group of products.
+
+8. Partner Functions
+
+The business partners of a sales order are identified by partner functions. The internal codes come from German terms:
+
+- AG (Sold-to Party): the customer who places the order.
+- WE (Ship-to Party): the customer who receives the goods.
+- RE (Bill-to Party): the customer who receives the invoice.
+- RG (Payer): the customer who pays the invoice.
+
+One customer can hold several partner functions in the same order.
+
+9. Sales Order Statuses
+
+In SAP S/4HANA, the status fields are stored directly in the header (VBAK) and item (VBAP) tables. The former status tables VBUK and VBUP are no longer used.
+
+Status values:
+- A: Not yet processed (not delivered, open).
+- B: Partially processed (partially delivered, in process).
+- C: Completely processed (fully delivered, completed).
+- Blank: Not relevant.
+
+Main statuses:
+- Overall Processing Status (GBSTK): progress of the whole sales document.
+- Overall Delivery Status (LFSTK): delivery progress of the order.
+- Item Delivery Status (LFSTA): delivery progress of a single item.
+
+10. Delivery and Billing Blocks
+
+A block stops the next step of the process until it is removed:
+
+- Delivery Block (LIFSK): prevents the creation of the outbound delivery, for example during a credit check.
+- Billing Block (FAKSK): prevents the creation of the billing document, for example while prices are verified.
+
+11. Late Sales Orders
+
+A sales order is considered late when its requested delivery date is in the past and its delivery status is still not delivered (A) or partially delivered (B).
+
+12. Follow-on Documents
+
+- LIKP / LIPS: outbound delivery header and items.
+- VBRK / VBRP: billing document header and items.
+- VBFA: sales document flow, which links the sales order to its deliveries and billing documents.
+
+13. Sales Order API in SAP S/4HANA Cloud
+
+In SAP S/4HANA Cloud, sales orders are exposed by the API_SALESORDER OData V4 service (Sales Order A2X).
+
+Main entities:
+- SalesOrder: header data, for example SalesOrder, SalesOrderType, SoldToParty, RequestedDeliveryDate, OverallDeliveryStatus.
+- SalesOrderItem: item data, for example Product, RequestedQuantity, NetAmount, DeliveryStatus.
+- SalesOrderScheduleLine: schedule lines, for example ConfirmedDeliveryDate and open confirmed quantity.
+- SalesOrderPartner: partner functions, for example the sold-to party.
