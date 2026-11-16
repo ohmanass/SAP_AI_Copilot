@@ -212,6 +212,12 @@ Step "Cloud Foundry target"
 $target = cf target
 if ($LASTEXITCODE -ne 0) { throw "Not logged in. Run: cf login -a <api endpoint> --sso" }
 $target | Select-String 'API endpoint|org:|space:|user:' | ForEach-Object { Write-Host "   $($_.Line.Trim())" }
+# "cf target" answers from the local config even with an expired token: check the
+# session for real, otherwise a missing service could not be told from an auth error.
+$previous = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+try { cf oauth-token 2>&1 | Out-Null } finally { $ErrorActionPreference = $previous }
+if ($LASTEXITCODE -ne 0) { throw "Cloud Foundry session expired. Run: cf login -a https://api.cf.eu10-005.hana.ondemand.com --sso" }
 
 # ---------------------------------------------------------------------------
 # 3. Services
