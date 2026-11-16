@@ -53,3 +53,46 @@ def search_purchase_orders(supplier: str | None = None, date_from: str | None = 
     return get_data_source().search_purchase_orders(
         supplier=supplier, date_from=date_from, date_to=date_to, limit=limit
     )
+
+
+# ----------------------------------------------------------------------
+# Finance (SAP FI): supplier invoices and three-way match
+# ----------------------------------------------------------------------
+
+_finance_source = None
+
+FINANCE_UNAVAILABLE = {
+    "error": "Supplier invoice data is only available with SAP_DATA_SOURCE=odata "
+             "(SAP S/4HANA Cloud). The local demo dataset has no invoices or goods receipts."
+}
+
+
+def get_finance_source():
+    """Supplier invoice source, or None when SAP S/4HANA is not the configured data source."""
+    global _finance_source
+
+    if get_data_source().key != "odata":
+        return None
+    if _finance_source is None:
+        from app.sap_data.finance_source import S4HanaFinanceSource
+        _finance_source = S4HanaFinanceSource(get_data_source())
+    return _finance_source
+
+
+def get_supplier_invoice(invoice: str, fiscal_year: str | None = None):
+    source = get_finance_source()
+    return source.get_supplier_invoice(invoice, fiscal_year) if source else FINANCE_UNAVAILABLE
+
+
+def search_supplier_invoices(supplier: str | None = None, date_from: str | None = None,
+                             date_to: str | None = None, blocked_only: bool = False, limit: int = 10):
+    source = get_finance_source()
+    if not source:
+        return FINANCE_UNAVAILABLE
+    return source.search_supplier_invoices(supplier=supplier, date_from=date_from, date_to=date_to,
+                                           blocked_only=blocked_only, limit=limit)
+
+
+def match_purchase_order_invoices(po_number: str):
+    source = get_finance_source()
+    return source.match_purchase_order_invoices(po_number) if source else FINANCE_UNAVAILABLE

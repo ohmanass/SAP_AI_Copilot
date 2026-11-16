@@ -14,13 +14,14 @@ Table:
         "columns": [{"key", "type", "importance", "unit_key"?}],
         "rows": [{...}],
         "total": int | None,               total matching records, when known
-        "total_unit": str,                 what "total" counts: "orders" or "schedule_lines"
+        "total_unit": str,                 what "total" counts: "orders", "schedule_lines" or "invoices"
         "window": str | None,              time window of the query, when limited
-        "row_action": str | None           "purchase_order" / "sales_order": a row opens that document
+        "row_action": str | None           "purchase_order", "sales_order", "supplier_invoice" or
+                                           "three_way_match": what a row press asks for
         "row_key": str | None              row field holding the document number
     }
 
-Column types: id, text, date, number, quantity, amount, status, days.
+Column types: id, text, date, number, quantity, amount, status, days, block (payment block code).
 Columns absent from every row are dropped: the demo dataset and SAP S/4HANA
 do not return the same fields.
 """
@@ -81,6 +82,41 @@ SO_LIST_COLUMNS = (
     _col("days_late", "days"),
     _col("net_amount", "amount", unit_key="currency"),
     _col("delivery_status", "status")
+)
+
+
+INVOICE_ITEM_COLUMNS = (
+    _col("item", "id"),
+    _col("po_number", "id"),
+    _col("po_item", "id"),
+    _col("plant", "id", "low"),
+    _col("quantity", "quantity", unit_key="unit"),
+    _col("amount", "amount", unit_key="currency"),
+    _col("goods_receipt", "id", "low")
+)
+
+INVOICE_LIST_COLUMNS = (
+    _col("invoice", "id"),
+    _col("supplier"),
+    _col("supplier_reference", "id", "low"),
+    _col("invoice_date", "date", "low"),
+    _col("posting_date", "date"),
+    _col("gross_amount", "amount", unit_key="currency"),
+    _col("payment_block", "block"),
+    _col("status", "status")
+)
+
+MATCH_COLUMNS = (
+    _col("item", "id"),
+    _col("material", "id", "low"),
+    _col("description"),
+    _col("ordered_quantity", "quantity", unit_key="unit"),
+    _col("received_quantity", "quantity", unit_key="unit"),
+    _col("invoiced_quantity", "quantity", unit_key="unit"),
+    _col("invoiced_amount", "amount", "low", unit_key="currency"),
+    _col("price_difference", "amount", unit_key="currency"),
+    _col("gr_ir_balance", "amount", "low", unit_key="currency"),
+    _col("match_status", "status")
 )
 
 
@@ -192,13 +228,57 @@ def _sales_order_list(kind):
     return build
 
 
+def _supplier_invoice(result):
+    return _table(
+        "supplier_invoice", [result.get("invoice"), result.get("supplier")], result,
+        INVOICE_ITEM_COLUMNS, result.get("items") or [],
+        row_action="three_way_match", row_key="po_number",
+        attributes=_attributes(result, (
+            ("supplier", "text", None),
+            ("supplier_reference", "id", None),
+            ("invoice_date", "date", None),
+            ("posting_date", "date", None),
+            ("baseline_date", "date", None),
+            ("payment_terms", "id", None),
+            ("status", "status", None),
+            ("payment_status", "text", None),
+            ("payment_block", "block", None),
+            ("gross_amount", "amount", "currency")
+        ))
+    )
+
+
+def _supplier_invoice_list(result):
+    kind = "blocked_supplier_invoices" if result.get("filter") else "supplier_invoice_search"
+    return _table(kind, [], result, INVOICE_LIST_COLUMNS, result.get("invoices") or [],
+                  total=result.get("total_matching"), total_unit="invoices",
+                  row_action="supplier_invoice", row_key="invoice")
+
+
+def _three_way_match(result):
+    return _table(
+        "three_way_match", [result.get("po_number"), result.get("supplier")], result,
+        MATCH_COLUMNS, result.get("items") or [],
+        attributes=_attributes(result, (
+            ("supplier", "text", None),
+            ("match_status", "status", None),
+            ("ordered_amount", "amount", "currency"),
+            ("invoiced_amount", "amount", "currency"),
+            ("gr_ir_balance", "amount", "currency")
+        ))
+    )
+
+
 BUILDERS = {
     "get_purchase_order": _purchase_order,
     "get_overdue_orders": _purchase_order_list("overdue_purchase_orders"),
     "search_purchase_orders": _purchase_order_list("purchase_order_search"),
     "get_sales_order": _sales_order,
     "search_sales_orders": _sales_order_list("sales_order_search"),
-    "get_late_sales_orders": _sales_order_list("late_sales_orders")
+    "get_late_sales_orders": _sales_order_list("late_sales_orders"),
+    "get_supplier_invoice": _supplier_invoice,
+    "search_supplier_invoices": _supplier_invoice_list,
+    "match_purchase_order_invoices": _three_way_match
 }
 
 

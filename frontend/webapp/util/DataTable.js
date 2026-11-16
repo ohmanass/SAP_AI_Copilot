@@ -43,7 +43,21 @@ sap.ui.define([
 		DELIVERED: "Success",
 		IN_PROCESS: "Warning",
 		COMPLETED: "Success",
-		NOT_RELEVANT: "None"
+		NOT_RELEVANT: "None",
+		// Supplier invoices and three-way match
+		POSTED: "Success",
+		PARKED: "Warning",
+		HELD: "Warning",
+		MATCHED: "Success",
+		FULLY_MATCHED: "Success",
+		PARTIALLY_INVOICED: "Warning",
+		NOT_INVOICED: "Warning",
+		NOT_RECEIVED: "None",
+		IN_PROGRESS: "Information",
+		VARIANCE: "Error",
+		QUANTITY_VARIANCE: "Error",
+		PRICE_VARIANCE: "Error",
+		INVOICED_NOT_RECEIVED: "Error"
 	};
 
 	const isEmpty = (value) => value === null || value === undefined || value === "";
@@ -108,6 +122,13 @@ sap.ui.define([
 							state: { path, formatter: (value) => (value > 14 ? "Error" : value > 0 ? "Warning" : "None") },
 							inverted: false
 						});
+					case "block":
+						// Payment block code (e.g. A, R): shown in red when set
+						return new ObjectStatus({
+							text: { path, formatter: (value) => (isEmpty(value) ? "" : text("dataBlocked", [value])) },
+							state: "Error",
+							icon: { path, formatter: (value) => (isEmpty(value) ? "" : "sap-icon://locked") }
+						});
 					case "id":
 						return new Text({ text: { path }, wrapping: false }).addStyleClass("cpDataId");
 					default:
@@ -136,7 +157,7 @@ sap.ui.define([
 				alignItems: "Center",
 				items: [
 					new Title({ text: title, level: "H3", wrapping: true }).addStyleClass("cpDataTitle"),
-					new Text({ text: table.rows.length ? text("dataRows", [table.rows.length]) : "" }).addStyleClass("cpDataCount")
+					new Text({ text: table.rows.length ? text(table.rows.length === 1 ? "dataRow" : "dataRows", [table.rows.length]) : "" }).addStyleClass("cpDataCount")
 				]
 			}).addStyleClass("cpDataHeader"));
 

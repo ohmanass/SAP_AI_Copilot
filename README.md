@@ -1,6 +1,6 @@
 # SAP AI Copilot
 
-Assistant IA pour SAP MM et le développement ABAP, construit sur **SAP Generative AI Hub** (SAP AI Core). Il combine un agent à **Tool Calling** qui interroge les commandes d'achat d'un système **SAP S/4HANA Cloud via OData V4**, un pipeline **RAG** sur une documentation technique SAP et une interface **SAPUI5** inspirée de SAP Fiori.
+Assistant IA pour SAP MM, SD, FI et le développement ABAP, construit sur **SAP Generative AI Hub** (SAP AI Core). Il combine un agent à **Tool Calling** qui interroge les commandes d'achat, les commandes clients et les factures fournisseurs d'un système **SAP S/4HANA Cloud via OData**, un pipeline **RAG** sur une documentation technique SAP et une interface **SAPUI5** inspirée de SAP Fiori.
 
 L'application fonctionne en local et se déploie sur **SAP BTP (Cloud Foundry)** derrière l'**Application Router**, avec connexion SAP (XSUAA).
 
@@ -11,12 +11,13 @@ L'application fonctionne en local et se déploie sur **SAP BTP (Cloud Foundry)**
 ### Agent IA
 
 - GPT-4o-mini via SAP Generative AI Hub (SDK `sap-ai-sdk-gen`)
-- Tool Calling avec sept outils :
+- Tool Calling avec dix outils :
   - **Achats (MM)** : consultation d'une commande d'achat (postes, échéances, quantités ouvertes), analyse des retards de livraison, recherche par fournisseur ou par date
   - **Ventes (SD)** : consultation d'une commande client (client, statuts, postes, dates confirmées), recherche par client ou par date, commandes clients en retard de livraison
-  - **Documentation** : recherche RAG dans la documentation du module (MM, SD ou ABAP)
-- Données transactionnelles lues dans **SAP S/4HANA Cloud** via les API officielles `API_PURCHASEORDER_2` et `API_SALESORDER` (OData V4), ou dans une base SQLite de démonstration (achats uniquement) utilisable hors ligne
-- **Espaces de travail par module** (MM, SD, ABAP) : l'agent n'utilise que les outils et la documentation du module choisi
+  - **Finance (FI)** : consultation d'une facture fournisseur (montants, conditions de paiement, blocage de paiement, postes facturés), recherche par fournisseur, par date ou des factures bloquées au paiement, **rapprochement à trois** d'une commande d'achat (commandé / reçu / facturé, poste par poste, avec écarts de quantité et de prix et solde GR/IR)
+  - **Documentation** : recherche RAG dans la documentation du module (MM, SD, FI ou ABAP)
+- Données transactionnelles lues dans **SAP S/4HANA Cloud** via les API officielles `API_PURCHASEORDER_2` et `API_SALESORDER` (OData V4), `API_SUPPLIERINVOICE_PROCESS_SRV`, `API_MATERIAL_DOCUMENT_SRV` et `API_BUSINESS_PARTNER` (OData V2), ou dans une base SQLite de démonstration (achats uniquement) utilisable hors ligne
+- **Espaces de travail par module** (MM, SD, FI, ABAP) : l'agent n'utilise que les outils et la documentation du module choisi
 - RAG sur ChromaDB avec les embeddings `text-embedding-3-large`
 - Réponses fondées sur les données et les documents récupérés, avec citation des sources
 
@@ -26,7 +27,7 @@ L'application fonctionne en local et se déploie sur **SAP BTP (Cloud Foundry)**
 - Chat : envoi avec Entrée, retour à la ligne avec Shift + Entrée, indicateur de génération, rendu Markdown, copie des réponses, gestion des erreurs avec bouton « Réessayer »
 - Sources RAG affichées sous chaque réponse, avec l'extrait réellement récupéré dans ChromaDB et sa distance vectorielle
 - Outils utilisés par l'agent affichés pour chaque réponse
-- **Tableaux Fiori** sous la réponse pour les données SAP (commandes d'achat et commandes clients) : en-tête du document, postes, montants, dates, statuts colorés, jours de retard. Les tableaux sont construits par le backend à partir des résultats des outils, jamais à partir du texte du modèle. Un clic sur une ligne d'une liste ouvre l'analyse du document. Les colonnes secondaires sont masquées quand la place manque
+- **Tableaux Fiori** sous la réponse pour les données SAP (commandes d'achat, commandes clients, factures fournisseurs et rapprochement à trois) : en-tête du document, postes, montants, dates, statuts colorés, jours de retard, blocages de paiement. Les tableaux sont construits par le backend à partir des résultats des outils, jamais à partir du texte du modèle. Un clic sur une ligne d'une liste ouvre l'analyse du document. Les colonnes secondaires sont masquées quand la place manque
 - Page **Modules** : un espace de travail par module SAP, avec un statut réel (connecté, documentation, prévu), ses outils, sa documentation et ses suggestions
 - Historique persistant : nouvelle conversation, liste, reprise, renommage, suppression. Chaque conversation garde son module. Le contexte de l'agent est restauré après un redémarrage du backend
 - Page **Knowledge Base** : documents indexés, nombre de chunks indexés et attendus, statut d'indexation
@@ -66,6 +67,11 @@ Agent SAP (Tool Calling)
         ├── get_overdue_orders        ├── Source de données SAP (SAP_DATA_SOURCE)
         ├── search_purchase_orders   ─┘     ├── odata  : SAP S/4HANA Cloud, API_PURCHASEORDER_2 (OData V4)
         │                                   └── sqlite : base de démonstration locale
+        ├── get_sales_order, search_sales_orders, get_late_sales_orders
+        │                            ── SAP S/4HANA Cloud, API_SALESORDER (OData V4)
+        ├── get_supplier_invoice, search_supplier_invoices, match_purchase_order_invoices
+        │                            ── SAP S/4HANA Cloud, API_SUPPLIERINVOICE_PROCESS_SRV,
+        │                               API_MATERIAL_DOCUMENT_SRV, API_BUSINESS_PARTNER (OData V2)
         └── search_sap_documentation ── RAG / ChromaDB
 ```
 
@@ -80,7 +86,7 @@ SAP_AI_Copilot/
 │   ├── agent/data_tables.py # Tableaux de données SAP construits à partir des résultats des outils
 │   ├── llm/                # Client SAP Generative AI Hub
 │   ├── tools/              # Outils appelés par l'agent
-│   ├── sap_data/           # Sources de données SAP : client OData V4 S/4HANA, SQLite
+│   ├── sap_data/           # Sources de données SAP : client OData S/4HANA (achats, ventes, factures), SQLite
 │   ├── rag/                # Découpage, indexation, recherche (ChromaDB)
 │   ├── database/           # Schéma et jeu de données SQLite
 │   └── storage/            # Persistance de l'historique des conversations
@@ -157,6 +163,8 @@ Les outils transactionnels lisent les commandes d'achat via l'API officielle **P
 | Nom du fournisseur | `_SupplierAddress/OrganizationName1` |
 | Postes (article, quantité, prix) | `_PurchaseOrderItem` |
 | Dates de livraison et quantités ouvertes | `_PurchaseOrderScheduleLineTP` / `PurchaseOrderScheduleLine` |
+
+Les factures fournisseurs (module FI) sont lues via l'API **Supplier Invoice** (`API_SUPPLIERINVOICE_PROCESS_SRV`, OData V2), avec la même clé : en-tête (`A_SupplierInvoice`) et postes rattachés aux commandes d'achat (`A_SuplrInvcItemPurOrdRef`). Les noms des fournisseurs viennent de `API_BUSINESS_PARTNER` (`A_Supplier`). Le **rapprochement à trois** compare, pour chaque poste d'une commande d'achat, la quantité commandée et le prix net (`API_PURCHASEORDER_2`), la quantité reçue (entrées de marchandises de `API_MATERIAL_DOCUMENT_SRV`, retours et annulations déduits selon le code débit/crédit) et la quantité et le montant facturés (avoirs déduits, factures annulées et leurs documents d'annulation ignorés). Un écart de prix est signalé au-delà de 0,5 % du montant attendu.
 
 Les commandes clients (module SD) sont lues via l'API **Sales Order (OData V4)**, service `API_SALESORDER`, avec la même clé : en-tête (`SalesOrder`), client (`_Partner`, fonction partenaire `AG`), postes (`_Item`) et échéances (`_ScheduleLine`). Une commande client est **en retard** lorsque sa date de livraison demandée est dépassée et qu'elle n'est pas entièrement livrée (`OverallDeliveryStatus` A ou B). L'API ne permettant pas de filtrer sur le nom du client, ce nom est d'abord résolu en numéro de client à partir des commandes récentes.
 
@@ -311,11 +319,10 @@ Les documents de `data/documents` servent de base documentaire au RAG.
 
 ## Pistes d'évolution
 
-- Module **FI** : factures fournisseurs et rapprochement commande / réception / facture
 - Import et ré-indexation de documents depuis l'interface
 - Historique persistant sur SAP BTP (SAP HANA Cloud ou PostgreSQL)
 - Destination service pour la connexion S/4HANA, à la place de la clé API
 
 ## Stack technique
 
-SAPUI5 1.136 · UI5 Tooling 4 · FastAPI · SAP Generative AI Hub · SAP AI SDK · SAP S/4HANA Cloud OData V4 · SAP BTP Cloud Foundry · Application Router · XSUAA · ChromaDB · SQLite · Python 3.12
+SAPUI5 1.136 · UI5 Tooling 4 · FastAPI · SAP Generative AI Hub · SAP AI SDK · SAP S/4HANA Cloud OData V2 et V4 · SAP BTP Cloud Foundry · Application Router · XSUAA · ChromaDB · SQLite · Python 3.12

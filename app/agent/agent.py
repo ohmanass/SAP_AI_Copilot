@@ -7,8 +7,11 @@ from app.tools.sap_data_tools import (
     get_overdue_orders,
     get_purchase_order,
     get_sales_order,
+    get_supplier_invoice,
+    match_purchase_order_invoices,
     search_purchase_orders,
-    search_sales_orders
+    search_sales_orders,
+    search_supplier_invoices
 )
 from app.tools.sap_documentation import search_sap_documentation
 
@@ -184,6 +187,94 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_supplier_invoice",
+            "description": (
+                "Retrieve a supplier invoice (SAP FI / MM invoice verification) "
+                "with its supplier, dates, gross amount, payment terms, payment "
+                "block, status and the purchase order items it invoices."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "invoice": {
+                        "type": "string",
+                        "description": "SAP supplier invoice document number, e.g. 5109900184."
+                    },
+                    "fiscal_year": {
+                        "type": "string",
+                        "description": "Fiscal year (YYYY). Optional: the most recent one is used by default."
+                    }
+                },
+                "required": ["invoice"],
+                "additionalProperties": False
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_supplier_invoices",
+            "description": (
+                "Search supplier invoices (SAP FI) by supplier (name or supplier "
+                "ID), posting date range, and/or only those blocked for payment. "
+                "Returns the most recent matches and the total number of matches."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "supplier": {
+                        "type": "string",
+                        "description": "Supplier name (partial match) or supplier ID."
+                    },
+                    "date_from": {
+                        "type": "string",
+                        "description": "Earliest posting date, format YYYY-MM-DD."
+                    },
+                    "date_to": {
+                        "type": "string",
+                        "description": "Latest posting date, format YYYY-MM-DD."
+                    },
+                    "blocked_only": {
+                        "type": "boolean",
+                        "description": "Only invoices with a payment block (default false)."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of invoices to return (default 10, max 50)."
+                    }
+                },
+                "required": [],
+                "additionalProperties": False
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "match_purchase_order_invoices",
+            "description": (
+                "Three-way match of a purchase order: for each item, compares the "
+                "ordered quantity (purchase order), the received quantity (goods "
+                "receipts) and the invoiced quantity and amount (supplier invoices). "
+                "Returns item match statuses (matched, quantity or price variance, "
+                "not invoiced, not received...), the GR/IR balance and the documents."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "po_number": {
+                        "type": "string",
+                        "description": "SAP purchase order number"
+                    }
+                },
+                "required": ["po_number"],
+                "additionalProperties": False
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "search_sap_documentation",
             "description": """
             Search the SAP technical documentation for information
@@ -224,6 +315,9 @@ TOOL_REGISTRY = {
     "get_sales_order": get_sales_order,
     "search_sales_orders": search_sales_orders,
     "get_late_sales_orders": get_late_sales_orders,
+    "get_supplier_invoice": get_supplier_invoice,
+    "search_supplier_invoices": search_supplier_invoices,
+    "match_purchase_order_invoices": match_purchase_order_invoices,
     "search_sap_documentation": search_sap_documentation
 }
 
@@ -253,6 +347,8 @@ class SAPAgent:
                     You specialize in:
                     - SAP S/4HANA
                     - SAP MM
+                    - SAP SD
+                    - SAP FI (supplier invoices)
                     - ABAP
                     - CDS Views
                     - OData
@@ -277,6 +373,14 @@ class SAPAgent:
                     - get_late_sales_orders: sales orders past their requested
                     delivery date and not fully delivered.
 
+                    Finance (SAP FI, invoice verification):
+                    - get_supplier_invoice: a supplier invoice with its amounts,
+                    payment block, status and invoiced purchase order items.
+                    - search_supplier_invoices: supplier invoices by supplier,
+                    posting date and/or payment block.
+                    - match_purchase_order_invoices: three-way match of a
+                    purchase order (ordered / received / invoiced, per item).
+
                     Documentation:
                     - search_sap_documentation: searches the SAP technical
                     documentation using RAG.
@@ -291,8 +395,9 @@ class SAPAgent:
                     window or is limited, state the window and the totals instead
                     of implying the list is exhaustive.
                     The application displays the records returned by the
-                    purchase order and sales order tools as an interactive
-                    SAP Fiori table right below your answer. Never repeat those
+                    purchase order, sales order and supplier invoice tools
+                    as an interactive SAP Fiori table right below your answer.
+                    Never repeat those
                     records: no Markdown table and no list with one entry per
                     order or per item. Write a short summary instead (two to
                     four sentences): totals, the most important orders or items

@@ -1,0 +1,103 @@
+SAP FI - SUPPLIER INVOICES AND INVOICE VERIFICATION
+
+1. Overview
+
+SAP Financial Accounting (FI) records all business transactions with a financial impact. Accounts payable (FI-AP) manages the amounts owed to suppliers: supplier invoices, credit memos and outgoing payments.
+
+For purchase-order-based invoices, the supplier invoice is entered in logistics invoice verification (MM-IV). Posting the invoice creates the accounting document in FI.
+
+2. Procure-to-Pay Process
+
+The procure-to-pay process links purchasing and accounting:
+
+1. Create the purchase order.
+2. Post the goods receipt.
+3. Enter and verify the supplier invoice against the purchase order and the goods receipt.
+4. Release the invoice if it is blocked for payment.
+5. Pay the supplier with the payment run.
+
+3. Supplier Invoice Tables
+
+In SAP, supplier invoices from invoice verification are stored in these database tables:
+
+- RBKP: supplier invoice header (invoice document number, fiscal year, invoicing party, invoice and posting dates, gross amount, currency, payment terms, payment block, status).
+- RSEG: supplier invoice items that reference purchase order items (purchase order, item, quantity, amount, reference goods receipt).
+- EKBE: purchase order history, which records goods receipts and invoice receipts for each purchase order item.
+- MATDOC: material documents, including goods receipts, in SAP S/4HANA.
+- BKPF / BSEG: accounting document header and items.
+- ACDOCA: the universal journal, the central table for accounting line items in SAP S/4HANA.
+
+4. Three-Way Match
+
+The three-way match compares three documents for each purchase order item:
+
+- The purchase order: ordered quantity and agreed net price.
+- The goods receipt: quantity actually received.
+- The supplier invoice: quantity and amount invoiced by the supplier.
+
+With goods-receipt-based invoice verification, a supplier can only be paid for quantities that have been received, at the price agreed in the purchase order.
+
+5. GR/IR Clearing Account
+
+The GR/IR clearing account (goods receipt / invoice receipt) is an interim account between the goods receipt and the invoice:
+
+- Goods receipt: the inventory or expense account is debited and the GR/IR account is credited with the value received.
+- Invoice receipt: the GR/IR account is debited and the supplier account is credited with the invoiced amount.
+
+When quantities and prices match, the GR/IR balance of the purchase order item is zero. A positive balance means goods were received but not yet invoiced. A negative balance means the supplier invoiced more than was received.
+
+6. Tolerances and Variances
+
+Invoice verification checks the invoice against tolerance limits defined per company code. Common tolerance keys:
+
+- DQ: quantity variance, when the invoiced quantity exceeds the quantity received.
+- PP: price variance, when the invoiced price differs from the purchase order price.
+
+If a variance exceeds the tolerance, the invoice can still be posted but it is automatically blocked for payment.
+
+7. Payment Blocks
+
+A payment block prevents the payment run from paying the invoice:
+
+- R (blocked by invoice verification): set automatically when a tolerance is exceeded.
+- A (blocked for payment): set manually or by the payment terms.
+
+A blocked invoice stays open until the block is removed. In SAP S/4HANA, invoices blocked by invoice verification are released with the release function (transaction MRBR in on-premise systems).
+
+8. Invoice Document Status
+
+The status of a supplier invoice document shows its processing stage:
+
+- 5: Posted. The accounting document has been created.
+- A: Parked. The invoice is saved but not posted.
+- D: Entered and held.
+
+9. Credit Memos, Subsequent Debits and Reversals
+
+- Credit memo: reduces the quantity and amount invoiced for a purchase order item, for example after a return.
+- Subsequent debit or credit: corrects the invoiced amount without changing the quantity, for example after a price change.
+- Reversal: an invoice posted by mistake is cancelled by a reversal document. The original invoice is marked as reversed and both documents no longer count in the invoiced totals.
+
+10. Payment Terms
+
+The payment terms define when an invoice is due and which cash discounts apply. For example, NT30 means the net amount is due 30 days after the baseline date. The baseline date is the starting date for the payment terms, usually the invoice date or the posting date.
+
+11. Supplier Invoice APIs in SAP S/4HANA Cloud
+
+- API_SUPPLIERINVOICE_PROCESS_SRV (OData V2): supplier invoice header (A_SupplierInvoice) and purchase order references of the invoice items (A_SuplrInvcItemPurOrdRef).
+- API_MATERIAL_DOCUMENT_SRV (OData V2): material document items (A_MaterialDocumentItem), including goods receipts for purchase orders. Movement type 101 is a goods receipt, 102 is its reversal, 122 is a return delivery to the supplier.
+- API_BUSINESS_PARTNER (OData V2): supplier master data and names (A_Supplier).
+
+12. Three-Way Match Statuses in SAP AI Copilot
+
+The three-way match tool computes one status per purchase order item:
+
+- MATCHED: invoiced quantity equals received quantity, and the invoiced amount matches the purchase order price within the tolerance.
+- PARTIALLY_INVOICED: part of the received quantity is not invoiced yet.
+- NOT_INVOICED: goods were received but no invoice was posted yet.
+- NOT_RECEIVED: nothing was received or invoiced yet.
+- QUANTITY_VARIANCE: the invoiced quantity is higher than the received quantity.
+- INVOICED_NOT_RECEIVED: the item is invoiced but nothing was received.
+- PRICE_VARIANCE: the invoiced amount differs from the purchase order price by more than 0.5 %.
+
+The purchase order is FULLY_MATCHED when every item is fully received and matched, and VARIANCE when at least one item has a quantity or price variance.

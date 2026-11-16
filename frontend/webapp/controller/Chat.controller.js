@@ -15,6 +15,9 @@ sap.ui.define([
 		get_sales_order: "sap-icon://sales-order",
 		search_sales_orders: "sap-icon://customer-order-entry",
 		get_late_sales_orders: "sap-icon://past",
+		get_supplier_invoice: "sap-icon://receipt",
+		search_supplier_invoices: "sap-icon://money-bills",
+		match_purchase_order_invoices: "sap-icon://compare",
 		search_sap_documentation: "sap-icon://course-book"
 	};
 

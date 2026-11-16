@@ -53,7 +53,10 @@ MODULES = (
             "open quantities and goods receipt. Use the purchase order tools for "
             "transactional questions and the documentation for MM concepts. "
             "Customer sales orders belong to the SD workspace: if the user asks "
-            "about them, do not call any tool, say so and suggest the SD workspace."
+            "about them, do not call any tool, say so and suggest the SD workspace. "
+            "Supplier invoices and the invoice match belong to the FI workspace: "
+            "if the user asks about them, do not call any tool, say so and suggest "
+            "the FI workspace."
         ),
         suggestions=(
             ("Show overdue purchase orders.", "Delivery analysis", "sap-icon://shipping-status"),
@@ -120,9 +123,32 @@ MODULES = (
         key="fi",
         code="FI",
         name="Financial Accounting",
-        description="Supplier invoices and the purchase order / goods receipt / invoice match. Planned.",
-        status="planned",
-        icon="sap-icon://money-bills"
+        description="Supplier invoices, payment blocks and the purchase order / goods receipt / invoice match.",
+        status="connected",
+        icon="sap-icon://money-bills",
+        tools=("get_supplier_invoice", "search_supplier_invoices", "match_purchase_order_invoices",
+               DOCUMENTATION_TOOL),
+        doc_sources=("sap_fi.txt",),
+        apis=("API_SUPPLIERINVOICE_PROCESS_SRV", "API_MATERIAL_DOCUMENT_SRV", "API_BUSINESS_PARTNER (OData V2)"),
+        instructions=(
+            "You are working in the SAP FI (Financial Accounting) workspace, focused on "
+            "accounts payable: supplier invoices, payment blocks and the three-way match "
+            "between purchase order, goods receipt and invoice. Use the invoice tools for "
+            "transactional questions and the documentation for FI concepts (invoice "
+            "verification, tolerances, GR/IR account, payment blocks). "
+            "When an invoice is blocked or a match shows a variance, state the facts "
+            "returned by the tools (quantities, amounts, documents) and never speculate "
+            "about the business reason. "
+            "Customer sales orders belong to the SD workspace: if the user asks about "
+            "them, do not call any tool, say so and suggest the SD workspace."
+        ),
+        suggestions=(
+            ("Show supplier invoices blocked for payment.", "Payment blocks", "sap-icon://locked"),
+            ("Run the three-way match for purchase order 4500043954.", "Three-way match", "sap-icon://compare"),
+            ("Analyse supplier invoice 5109900184.", "Invoice lookup", "sap-icon://receipt"),
+            ("What is the GR/IR clearing account?", "Documentation", "sap-icon://course-book")
+        ),
+        requires_s4hana=True
     )
 )
 
