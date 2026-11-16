@@ -26,6 +26,7 @@ L'application fonctionne en local et se déploie sur **SAP BTP (Cloud Foundry)**
 - Chat : envoi avec Entrée, retour à la ligne avec Shift + Entrée, indicateur de génération, rendu Markdown, copie des réponses, gestion des erreurs avec bouton « Réessayer »
 - Sources RAG affichées sous chaque réponse, avec l'extrait réellement récupéré dans ChromaDB et sa distance vectorielle
 - Outils utilisés par l'agent affichés pour chaque réponse
+- **Tableaux Fiori** sous la réponse pour les données SAP (commandes d'achat et commandes clients) : en-tête du document, postes, montants, dates, statuts colorés, jours de retard. Les tableaux sont construits par le backend à partir des résultats des outils, jamais à partir du texte du modèle. Un clic sur une ligne d'une liste ouvre l'analyse du document. Les colonnes secondaires sont masquées quand la place manque
 - Page **Modules** : un espace de travail par module SAP, avec un statut réel (connecté, documentation, prévu), ses outils, sa documentation et ses suggestions
 - Historique persistant : nouvelle conversation, liste, reprise, renommage, suppression. Chaque conversation garde son module. Le contexte de l'agent est restauré après un redémarrage du backend
 - Page **Knowledge Base** : documents indexés, nombre de chunks indexés et attendus, statut d'indexation
@@ -76,6 +77,7 @@ SAP_AI_Copilot/
 │   ├── cloud_env.py        # Lecture des services liés Cloud Foundry (VCAP_SERVICES)
 │   ├── system_info.py      # Statut des services et inventaire de la Knowledge Base
 │   ├── agent/agent.py      # Agent à Tool Calling
+│   ├── agent/data_tables.py # Tableaux de données SAP construits à partir des résultats des outils
 │   ├── llm/                # Client SAP Generative AI Hub
 │   ├── tools/              # Outils appelés par l'agent
 │   ├── sap_data/           # Sources de données SAP : client OData V4 S/4HANA, SQLite
@@ -96,7 +98,7 @@ SAP_AI_Copilot/
 │       ├── controller/     # App, Chat, KnowledgeBase, Settings
 │       ├── view/           # Vues XML
 │       ├── service/        # Client REST centralisé
-│       ├── util/           # Rendu Markdown sécurisé
+│       ├── util/           # Rendu Markdown sécurisé, tableaux de données SAP
 │       ├── css/            # Thème
 │       └── i18n/           # Textes
 └── requirements.txt
@@ -107,8 +109,8 @@ SAP_AI_Copilot/
 | Méthode | Endpoint | Description |
 | --- | --- | --- |
 | `GET` | `/api/health` | Disponibilité du backend |
-| `POST` | `/api/chat` | Envoie un message. Renvoie `session_id`, `response`, `sources` et `tools_used` |
-| `POST` | `/api/chat/stream` | Même requête, réponse en flux NDJSON : `session`, `tool_start`, `tool_end`, `token`, `done`, `error` |
+| `POST` | `/api/chat` | Envoie un message. Renvoie `session_id`, `response`, `sources`, `tools_used` et `tables` |
+| `POST` | `/api/chat/stream` | Même requête, réponse en flux NDJSON : `session`, `tool_start`, `tool_end`, `token`, `done` (avec `tables`), `error` |
 | `GET` | `/api/sessions` | Liste des conversations |
 | `GET` | `/api/sessions/{id}` | Messages d'une conversation |
 | `DELETE` | `/api/sessions/{id}` | Supprime une conversation |
@@ -310,7 +312,6 @@ Les documents de `data/documents` servent de base documentaire au RAG.
 ## Pistes d'évolution
 
 - Module **FI** : factures fournisseurs et rapprochement commande / réception / facture
-- Affichage des données SAP sous forme de tableaux Fiori
 - Import et ré-indexation de documents depuis l'interface
 - Historique persistant sur SAP BTP (SAP HANA Cloud ou PostgreSQL)
 - Destination service pour la connexion S/4HANA, à la place de la clé API

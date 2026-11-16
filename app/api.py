@@ -70,6 +70,8 @@ class ChatResponse(BaseModel):
     sources: list[Source] = []
     tools_used: list[str] = []
     module: str | None = None
+    # SAP data tables built from the tool results (see app.agent.data_tables)
+    tables: list[dict] = []
 
 
 def get_session(session_id: str, requested_module: str | None = None):
@@ -122,7 +124,8 @@ def chat(request: ChatRequest):
             assistant_message=result["response"],
             sources=result["sources"],
             tools_used=result["tools_used"],
-            module=module_key(agent)
+            module=module_key(agent),
+            tables=result["tables"]
         )
 
         return ChatResponse(
@@ -130,7 +133,8 @@ def chat(request: ChatRequest):
             response=result["response"],
             sources=result["sources"],
             tools_used=result["tools_used"],
-            module=module_key(agent)
+            module=module_key(agent),
+            tables=result["tables"]
         )
 
     except Exception as error:
@@ -149,7 +153,7 @@ def chat_stream(request: ChatRequest):
       tool_start   {"type", "name"}
       tool_end     {"type", "name", "success"}
       token        {"type", "content"}
-      done         {"type", "session_id", "response", "sources", "tools_used"}
+      done         {"type", "session_id", "response", "sources", "tools_used", "tables"}
       error        {"type", "message"}
     """
 
@@ -176,7 +180,8 @@ def chat_stream(request: ChatRequest):
                         assistant_message=event["response"],
                         sources=event["sources"],
                         tools_used=event["tools_used"],
-                        module=module_key(agent)
+                        module=module_key(agent),
+                        tables=event["tables"]
                     )
                     yield event_line({**event, "session_id": session_id, "module": module_key(agent)})
 

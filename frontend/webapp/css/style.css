@@ -875,6 +875,137 @@ html, body.cpBody {
 	gap: 0.375rem;
 }
 
+/* SAP data tables under an answer */
+.cpDataTables {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+	margin-top: 0.25rem;
+}
+
+.cpDataTable {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	padding: 0.875rem 0.875rem 0.375rem;
+	border: 1px solid var(--cp-border);
+	border-radius: 12px;
+	background: rgba(14, 25, 44, 0.6);
+	overflow: hidden;
+}
+
+.cpDataHeader {
+	display: flex;
+	gap: 0.75rem;
+	justify-content: space-between;
+}
+
+.cpDataTitle.sapMTitle {
+	font-size: 0.9375rem;
+	font-weight: 600;
+	color: var(--cp-text);
+}
+
+.cpDataCount.sapMText {
+	flex: none;
+	padding: 0.125rem 0.5rem;
+	border-radius: 999px;
+	background: rgba(59, 130, 246, 0.12);
+	font-size: 0.75rem;
+	color: #93c5fd;
+}
+
+.cpDataCount.sapMText:empty {
+	display: none;
+}
+
+.cpDataMeta.sapMText {
+	font-size: 0.75rem;
+	color: var(--cp-muted);
+}
+
+.cpDataAttributes {
+	display: flex;
+	gap: 0.75rem 1.75rem;
+	padding: 0.25rem 0 0.5rem;
+}
+
+.cpDataAttribute {
+	display: flex;
+	flex-direction: column;
+	gap: 0.125rem;
+	min-width: 7rem;
+}
+
+.cpDataAttribute .sapMLabel {
+	font-size: 0.75rem;
+	color: var(--cp-muted);
+}
+
+.cpDataGrid.sapMList,
+.cpDataGrid .sapMListTbl,
+.cpDataGrid .sapMLIB,
+.cpDataGrid .sapMListTblHeader,
+.cpDataGrid .sapMListTblHeaderCell {
+	background: transparent;
+}
+
+.cpDataGrid .sapMListTblHeaderCell .sapMText {
+	font-size: 0.6875rem;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--cp-muted);
+}
+
+.cpDataGrid .sapMListTblCell {
+	padding-top: 0.5rem;
+	padding-bottom: 0.5rem;
+}
+
+.cpDataGrid .sapMLIB.sapMLIBTypeNavigation:hover,
+.cpDataGrid .sapMLIB.sapMLIBActionable:hover {
+	background: var(--cp-surface-2);
+}
+
+.cpDataGrid .sapMText,
+.cpDataGrid .sapMObjectNumberText,
+.cpDataAttribute .sapMText {
+	font-size: 0.8125rem;
+}
+
+.cpDataId.sapMText {
+	font-family: var(--cp-mono);
+	color: var(--cp-cyan-soft);
+}
+
+/* Numbers, dates and statuses stay on one line */
+.cpDataGrid .sapMObjectNumber,
+.cpDataGrid .sapMObjStatus,
+.cpDataGrid .sapMObjStatusText,
+.cpDataAttribute .sapMObjectNumber {
+	white-space: nowrap;
+}
+
+/* Never widen the conversation: the table keeps the width of the message
+   and scrolls inside its card if the columns still do not fit */
+.cpDataTables,
+.cpDataTable,
+.cpDataTable > * {
+	min-width: 0;
+	max-width: 100%;
+}
+
+.cpDataGrid {
+	width: 100%;
+	overflow-x: auto;
+}
+
+.cpDataGrid .sapMGrowingListTrigger,
+.cpDataGrid .sapMGrowingListTrigger .sapMSLI {
+	background: transparent;
+}
+
 .cpSourceChip .sapMBtnInner {
 	border: 1px solid rgba(34, 211, 238, 0.26);
 	border-radius: 8px;

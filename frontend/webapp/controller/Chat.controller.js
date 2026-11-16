@@ -3,8 +3,9 @@ sap.ui.define([
 	"sap/ui/model/json/JSONModel",
 	"sap/ui/core/EventBus",
 	"sap/m/MessageToast",
-	"../util/Markdown"
-], (BaseController, JSONModel, EventBus, MessageToast, Markdown) => {
+	"../util/Markdown",
+	"../util/DataTable"
+], (BaseController, JSONModel, EventBus, MessageToast, Markdown, DataTable) => {
 	"use strict";
 
 	const TOOL_ICONS = {
@@ -421,7 +422,8 @@ sap.ui.define([
 				role: "assistant",
 				content: done.response,
 				sources: done.sources,
-				tools_used: done.tools_used
+				tools_used: done.tools_used,
+				tables: done.tables
 			}));
 
 			if (!stream.sessionId) {
@@ -504,6 +506,19 @@ sap.ui.define([
 			popover.openBy(button);
 		},
 
+		/** Factory of the SAP data tables shown under an answer. */
+		createDataTable(id, context) {
+			return DataTable.create(this, id, context);
+		},
+
+		/** A row of a list table asks the assistant for that document's details. */
+		onDataRowPress(event, action, key) {
+			const value = event.getSource().getBindingContext("chat").getProperty(key);
+			if (value && !this._chat().getProperty("/busy")) {
+				this._send(this.getText(`dataRowPrompt.${action}`, [value]));
+			}
+		},
+
 		formatWelcomeText(moduleDescription, defaultText) {
 			return moduleDescription ? this.getText("moduleWelcomeText", [moduleDescription]) : defaultText;
 		},
@@ -527,6 +542,7 @@ sap.ui.define([
 			return Object.assign({
 				tools: [],
 				sources: [],
+				tables: [],
 				html: "",
 				streaming: false,
 				stopped: false,
@@ -546,6 +562,7 @@ sap.ui.define([
 					label: this._toolLabel(name),
 					icon: TOOL_ICONS[name] || "sap-icon://wrench"
 				})),
+				tables: raw.tables || [],
 				sources: (raw.sources || []).map((source) => Object.assign({}, source, {
 					label: source.chunk === null || source.chunk === undefined
 						? source.source

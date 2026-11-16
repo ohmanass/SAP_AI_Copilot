@@ -93,6 +93,10 @@
 
 										<core:HTML content="{chat>html}" sanitizeContent="true" preferDOM="false" visible="{= ${chat>role} === 'assistant' &amp;&amp; !!${chat>html} }"/>
 
+										<!-- SAP data read by the tools (built by the backend, see util/DataTable.js) -->
+										<VBox class="cpDataTables" renderType="Bare" visible="{= ${chat>tables}.length > 0 }"
+											items="{path: 'chat>tables', factory: '.createDataTable', templateShareable: false}"/>
+
 										<MessageStrip
 											visible="{chat>stopped}"
 											type="Information"

@@ -75,6 +75,11 @@ def initialize():
         if "module" not in columns:
             connection.execute("ALTER TABLE conversations ADD COLUMN module TEXT")
 
+        # Additive migration: SAP data tables shown under an answer (JSON list)
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(messages)")}
+        if "tables" not in columns:
+            connection.execute("ALTER TABLE messages ADD COLUMN tables TEXT NOT NULL DEFAULT '[]'")
+
 
 def build_title(message: str) -> str:
     title = " ".join(message.split())
@@ -101,7 +106,8 @@ def save_exchange(
     assistant_message: str,
     sources: list,
     tools_used: list,
-    module: str | None = None
+    module: str | None = None,
+    tables: list | None = None
 ):
     """Store one user/assistant exchange, creating the conversation if needed."""
 
@@ -120,17 +126,18 @@ def save_exchange(
         connection.executemany(
             """
             INSERT INTO messages
-                (session_id, role, content, sources, tools_used, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (session_id, role, content, sources, tools_used, tables, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             [
-                (session_id, "user", user_message, "[]", "[]", now),
+                (session_id, "user", user_message, "[]", "[]", "[]", now),
                 (
                     session_id,
                     "assistant",
                     assistant_message,
                     json.dumps(sources, ensure_ascii=False),
                     json.dumps(tools_used, ensure_ascii=False),
+                    json.dumps(tables or [], ensure_ascii=False),
                     now
                 )
             ]
@@ -175,7 +182,7 @@ def get_conversation(session_id: str):
 
         rows = connection.execute(
             """
-            SELECT role, content, sources, tools_used, created_at
+            SELECT role, content, sources, tools_used, tables, created_at
             FROM messages
             WHERE session_id = ?
             ORDER BY message_id ASC
@@ -190,6 +197,7 @@ def get_conversation(session_id: str):
             "content": row["content"],
             "sources": json.loads(row["sources"]),
             "tools_used": json.loads(row["tools_used"]),
+            "tables": json.loads(row["tables"]),
             "created_at": row["created_at"]
         }
         for row in rows

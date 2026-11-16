@@ -1,5 +1,6 @@
 import json
 
+from app.agent.data_tables import collect_table
 from app.llm.llm_client import LLMClient
 from app.tools.sap_data_tools import (
     get_late_sales_orders,
@@ -289,9 +290,14 @@ class SAPAgent:
                     presenting transactional data. When a result covers a time
                     window or is limited, state the window and the totals instead
                     of implying the list is exhaustive.
-                    Present several purchase orders as one compact Markdown table
-                    (one row per order, only the most useful columns) instead of
-                    long nested lists, then add a short summary.
+                    The application displays the records returned by the
+                    purchase order and sales order tools as an interactive
+                    SAP Fiori table right below your answer. Never repeat those
+                    records: no Markdown table and no list with one entry per
+                    order or per item. Write a short summary instead (two to
+                    four sentences): totals, the most important orders or items
+                    by number, statuses and dates. The user reads the details
+                    in the table.
 
                     TOOL USAGE RULES:
 
@@ -375,16 +381,18 @@ class SAPAgent:
             {
                 "response": str,
                 "tools_used": [str, ...],
-                "sources": [{"source", "chunk", "distance", "content"}, ...]
+                "sources": [{"source", "chunk", "distance", "content"}, ...],
+                "tables": [...]   SAP data tables, see app.agent.data_tables
             }
         """
 
         history_length = len(self.messages)
         tools_used = []
         sources = []
+        tables = []
 
         try:
-            answer = self._run(user_input, tools_used, sources)
+            answer = self._run(user_input, tools_used, sources, tables)
         except Exception:
             # Keep the conversation consistent if the LLM call fails
             del self.messages[history_length:]
@@ -393,7 +401,8 @@ class SAPAgent:
         return {
             "response": answer,
             "tools_used": tools_used,
-            "sources": sources
+            "sources": sources,
+            "tables": tables
         }
 
     @staticmethod
@@ -421,7 +430,7 @@ class SAPAgent:
                 "content": document.get("content")
             })
 
-    def _run(self, user_input, tools_used, sources):
+    def _run(self, user_input, tools_used, sources, tables):
 
         self.messages.append({
             "role": "user",
@@ -477,12 +486,13 @@ class SAPAgent:
                     call.function.name,
                     call.function.arguments,
                     tools_used,
-                    sources
+                    sources,
+                    tables
                 )
 
         return MAX_ROUNDS_MESSAGE
 
-    def _execute_call(self, call_id, tool_name, raw_arguments, tools_used, sources):
+    def _execute_call(self, call_id, tool_name, raw_arguments, tools_used, sources, tables):
         """Run one tool call, record it and append its result to the conversation."""
 
         if tool_name not in tools_used:
@@ -497,6 +507,7 @@ class SAPAgent:
             )
 
             self._collect_sources(tool_name, result, sources)
+            collect_table(tool_name, result, tables)
 
             tool_result = {
                 "success": True,
@@ -532,7 +543,7 @@ class SAPAgent:
             {"type": "tool_start", "name": str}
             {"type": "tool_end", "name": str, "success": bool}
             {"type": "token", "content": str}
-            {"type": "done", "response": str, "tools_used": [...], "sources": [...]}
+            {"type": "done", "response": str, "tools_used": [...], "sources": [...], "tables": [...]}
 
         If the generator fails or is closed early (client disconnected),
         the conversation is rolled back to its previous state.
@@ -541,6 +552,7 @@ class SAPAgent:
         history_length = len(self.messages)
         tools_used = []
         sources = []
+        tables = []
         completed = False
 
         try:
@@ -597,7 +609,8 @@ class SAPAgent:
                         "type": "done",
                         "response": content,
                         "tools_used": tools_used,
-                        "sources": sources
+                        "sources": sources,
+                        "tables": tables
                     }
                     return
 
@@ -627,7 +640,8 @@ class SAPAgent:
                         call["name"],
                         call["arguments"],
                         tools_used,
-                        sources
+                        sources,
+                        tables
                     )
 
                     yield {"type": "tool_end", "name": call["name"], "success": success}
@@ -641,7 +655,8 @@ class SAPAgent:
                 "type": "done",
                 "response": MAX_ROUNDS_MESSAGE,
                 "tools_used": tools_used,
-                "sources": sources
+                "sources": sources,
+                "tables": tables
             }
 
         finally:
