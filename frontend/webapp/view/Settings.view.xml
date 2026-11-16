@@ -138,6 +138,12 @@
 						<Text text="{i18n>labelSystem}" class="cpRowLabel"/>
 						<Text text="{= ${settings>/status/sap_data/system} || '—' }" class="cpRowValue cpMono"/>
 					</HBox>
+					<HBox class="cpRow" renderType="Bare" visible="{= !!${settings>/status/sap_data/mode} }">
+						<Text text="{i18n>labelConnection}" class="cpRowLabel"/>
+						<Text
+							text="{parts: ['settings>/status/sap_data/mode', 'settings>/status/sap_data/destination'], formatter: '.formatSapConnection'}"
+							class="cpRowValue cpMono"/>
+					</HBox>
 					<HBox class="cpRow" renderType="Bare" visible="{= !!${settings>/status/sap_data/api} }">
 						<Text text="{i18n>labelApi}" class="cpRowLabel"/>
 						<Text text="{settings>/status/sap_data/api}" class="cpRowValue cpMono"/>

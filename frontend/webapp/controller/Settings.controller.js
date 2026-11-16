@@ -80,6 +80,12 @@ sap.ui.define([
 			return typeof value === "number" ? this.getText("valueLatency", [value]) : "";
 		},
 
+		formatSapConnection(mode, destination) {
+			return mode === "destination"
+				? this.getText("connectionDestination", [destination])
+				: this.getText("connectionDirect");
+		},
+
 		formatConnection(connection) {
 			if (!connection) {
 				return this.getText("valueNotTested");

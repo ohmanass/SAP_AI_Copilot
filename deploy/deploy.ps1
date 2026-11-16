@@ -11,7 +11,13 @@
       1. Build   deploy/build/backend    (Python app, pinned requirements, RAG index)
                  deploy/build/approuter  (approuter + SAPUI5 build, UI5 from the SAP CDN)
       2. Services: sap-ai-copilot-xsuaa (xsuaa/application),
-                   sap-ai-copilot-aicore, sap-ai-copilot-s4 (user-provided)
+                   sap-ai-copilot-aicore (user-provided),
+                   sap-ai-copilot-destination (destination/lite, free)
+         The SAP S/4HANA system is read from a BTP destination:
+           - BTP_S4_DESTINATION in .env: name of an existing subaccount destination
+             (e.g. a real S/4HANA system), used as is;
+           - otherwise: instance destination "sap-ai-copilot-s4" created from
+             SAP_API_BASE_URL (default: sandbox) and SAP_API_KEY.
       3. cf push backend then approuter
       4. Security check: the backend must answer 401 without an XSUAA token
 
@@ -37,7 +43,8 @@ $Backend   = "sap-ai-copilot-backend"
 $Approuter = "sap-ai-copilot-approuter"
 $Xsuaa     = "sap-ai-copilot-xsuaa"
 $AiCore    = "sap-ai-copilot-aicore"
-$S4        = "sap-ai-copilot-s4"
+$Destination = "sap-ai-copilot-destination"
+$LegacyS4  = "sap-ai-copilot-s4"     # user-provided service of the first versions, replaced by the destination
 
 function Step($text) { Write-Host "`n==> $text" -ForegroundColor Cyan }
 
@@ -105,12 +112,26 @@ function Get-ServiceStatus($name) {
     return ""
 }
 
+function Write-SecretFile([hashtable]$content) {
+    # Secrets go through a temporary file so they never appear in the process list.
+    # UTF-8 without BOM: the cf CLI rejects a BOM as invalid JSON.
+    $file = Join-Path ([IO.Path]::GetTempPath()) ("cf-" + [guid]::NewGuid() + ".json")
+    [IO.File]::WriteAllText($file, ($content | ConvertTo-Json -Depth 8), (New-Object Text.UTF8Encoding $false))
+    return $file
+}
+
+function Wait-Service($name) {
+    for ($i = 0; $i -lt 30; $i++) {
+        $status = Get-ServiceStatus $name
+        if ($status -match 'succeeded') { return }
+        if ($status -match 'failed') { throw "${name}: $status" }
+        Start-Sleep -Seconds 5
+    }
+}
+
 function Set-UserProvidedService($name, [hashtable]$credentials) {
-    # Credentials go through a temporary file so they never appear in the process list
-    $file = Join-Path ([IO.Path]::GetTempPath()) ("cups-" + [guid]::NewGuid() + ".json")
+    $file = Write-SecretFile $credentials
     try {
-        # UTF-8 without BOM: the cf CLI rejects a BOM as invalid JSON
-        [IO.File]::WriteAllText($file, ($credentials | ConvertTo-Json -Depth 5), (New-Object Text.UTF8Encoding $false))
         if (Test-ServiceExists $name) {
             Invoke-Native "cf update-user-provided-service $name" { cf update-user-provided-service $name -p $file }
         } else {
@@ -128,7 +149,9 @@ $EnvFile = Join-Path $Root ".env"
 if (-not (Test-Path $EnvFile)) { throw ".env not found at $EnvFile" }
 $envValues = Read-DotEnv $EnvFile
 
-$required = "AICORE_CLIENT_ID", "AICORE_CLIENT_SECRET", "AICORE_AUTH_URL", "AICORE_BASE_URL", "AICORE_RESOURCE_GROUP", "SAP_API_KEY"
+$S4Destination = $envValues["BTP_S4_DESTINATION"]
+$required = "AICORE_CLIENT_ID", "AICORE_CLIENT_SECRET", "AICORE_AUTH_URL", "AICORE_BASE_URL", "AICORE_RESOURCE_GROUP"
+if (-not $S4Destination) { $required += "SAP_API_KEY" }
 $missing = $required | Where-Object { -not $envValues[$_] }
 if ($missing) { throw "Missing in .env: $($missing -join ', ')" }
 $GenAiModel = if ($envValues["GENAI_MODEL_NAME"]) { $envValues["GENAI_MODEL_NAME"] } else { "gpt-4o-mini" }
@@ -229,12 +252,7 @@ if (Test-ServiceExists $Xsuaa) {
 } else {
     Invoke-Native "cf create-service $Xsuaa" { cf create-service xsuaa application $Xsuaa -c $xsSecurity }
 }
-for ($i = 0; $i -lt 30; $i++) {
-    $status = Get-ServiceStatus $Xsuaa
-    if ($status -match 'succeeded') { break }
-    if ($status -match 'failed') { throw "${Xsuaa}: $status" }
-    Start-Sleep -Seconds 5
-}
+Wait-Service $Xsuaa
 
 Step "Service $AiCore (user-provided, from .env)"
 Set-UserProvidedService $AiCore @{
@@ -245,8 +263,41 @@ Set-UserProvidedService $AiCore @{
     resource_group = $envValues["AICORE_RESOURCE_GROUP"]
 }
 
-Step "Service $S4 (user-provided, from .env)"
-Set-UserProvidedService $S4 @{ api_key = $envValues["SAP_API_KEY"] }
+Step "Service $Destination (destination/lite)"
+$destinationConfig = @{ HTML5Runtime_enabled = $false }
+if ($S4Destination) {
+    Write-Host "   SAP S/4HANA system: subaccount destination '$S4Destination' (BTP_S4_DESTINATION)"
+} else {
+    # Instance destination for the sandbox: the API key travels as an additional header
+    $S4Destination = "sap-ai-copilot-s4"
+    $s4Url = if ($envValues["SAP_API_BASE_URL"]) { $envValues["SAP_API_BASE_URL"] } else { "https://sandbox.api.sap.com/s4hanacloud" }
+    Write-Host "   SAP S/4HANA system: instance destination '$S4Destination' -> $s4Url"
+    $destinationConfig.init_data = @{
+        instance = @{
+            existing_destinations_policy = "update"
+            destinations = @(@{
+                Name             = $S4Destination
+                Type             = "HTTP"
+                URL              = $s4Url
+                Authentication   = "NoAuthentication"
+                ProxyType        = "Internet"
+                Description      = "SAP AI Copilot - SAP S/4HANA Cloud"
+                "URL.headers.APIKey" = $envValues["SAP_API_KEY"]
+            })
+        }
+    }
+}
+$file = Write-SecretFile $destinationConfig
+try {
+    if (Test-ServiceExists $Destination) {
+        Invoke-Native "cf update-service $Destination" { cf update-service $Destination -c $file }
+    } else {
+        Invoke-Native "cf create-service $Destination" { cf create-service destination lite $Destination -c $file }
+    }
+} finally {
+    Remove-Item $file -Force -ErrorAction SilentlyContinue
+}
+Wait-Service $Destination
 
 # ---------------------------------------------------------------------------
 # 4. Applications
@@ -261,7 +312,16 @@ if (-not $BackendHost) {
     $suffix = -join ((97..122) + (48..57) | Get-Random -Count 8 | ForEach-Object { [char]$_ })
     $BackendHost = "sap-ai-copilot-backend-$suffix"
 }
-$PushVars = @("--var", "genai_model=$GenAiModel", "--var", "backend_host=$BackendHost")
+$PushVars = @("--var", "genai_model=$GenAiModel", "--var", "backend_host=$BackendHost", "--var", "s4_destination=$S4Destination")
+
+# The API key used to live in a user-provided service: the destination replaces it
+if (Test-ServiceExists $LegacyS4) {
+    Step "Removing obsolete service $LegacyS4"
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try { cf unbind-service $Backend $LegacyS4 2>&1 | Out-Null } finally { $ErrorActionPreference = $previous }
+    Invoke-Native "cf delete-service $LegacyS4" { cf delete-service $LegacyS4 -f }
+}
 
 Step "Push $Backend ($BackendHost)"
 Invoke-Native "cf push $Backend" { cf push $Backend -f $Manifest @PushVars }

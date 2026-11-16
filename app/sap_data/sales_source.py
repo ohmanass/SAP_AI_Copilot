@@ -1,18 +1,18 @@
 """
 SAP S/4HANA Cloud sales orders (OData V4, API_SALESORDER, Sales Order A2X), read-only.
 
-Uses the same system and API key as the purchase order source
-(SAP_API_BASE_URL, SAP_API_KEY). Sales data is only available with
+Uses the same SAP connection as the purchase order source
+(app.sap_data.connection). Sales data is only available with
 SAP_DATA_SOURCE=odata: there is no SD demo dataset.
 """
 
-import os
 import re
 import time
 from datetime import date, timedelta
 
 from app.sap_data.odata_client import ODataClient, SAPODataError
-from app.sap_data.odata_source import DEFAULT_BASE_URL, MAX_LIMIT, _literal, _valid_date
+from app.sap_data.connection import get_connection
+from app.sap_data.odata_source import MAX_LIMIT, _literal, _valid_date
 
 SALES_ORDER_SERVICE = "sap/opu/odata4/sap/api_salesorder/srvd_a2x/sap/salesorder/0001/"
 
@@ -39,10 +39,12 @@ PROCESS_STATUS = {
 class S4HanaSalesSource:
 
     def __init__(self):
-        base_url = os.getenv("SAP_API_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
-        self.is_sandbox = "sandbox.api.sap.com" in base_url
-        self.label = "SAP S/4HANA Cloud sandbox" if self.is_sandbox else "SAP S/4HANA Cloud"
-        self.client = ODataClient(f"{base_url}/{SALES_ORDER_SERVICE}")
+        self.connection = get_connection()
+        self.client = ODataClient(SALES_ORDER_SERVICE)
+
+    @property
+    def label(self):
+        return self.connection.label
 
     # ------------------------------------------------------------------
     # Helpers

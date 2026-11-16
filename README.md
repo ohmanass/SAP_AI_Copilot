@@ -180,7 +180,9 @@ SAP_DATA_SOURCE=odata
 SAP_API_KEY=<votre clé>
 ```
 
-Avec `SAP_DATA_SOURCE=sqlite` (valeur par défaut), l'application utilise la base de démonstration locale et fonctionne sans réseau. `SAP_API_BASE_URL` permet de viser un autre système S/4HANA Cloud qui expose la même API.
+Avec `SAP_DATA_SOURCE=sqlite` (valeur par défaut), l'application utilise la base de démonstration locale et fonctionne sans réseau. `SAP_API_BASE_URL` permet de viser un autre système S/4HANA Cloud qui expose les mêmes API.
+
+Sur SAP BTP, le système S/4HANA est lu dans une **destination** du Destination service (`SAP_DESTINATION_NAME`), pas dans une clé en variable d'environnement : voir [Connexion S/4HANA par destination](#connexion-s4hana-par-destination).
 
 ## Installation
 
@@ -243,7 +245,7 @@ sap-ai-copilot-approuter   (Node.js, Application Router)
 sap-ai-copilot-backend     (Python, FastAPI)
    │  refuse tout appel sans jeton XSUAA valide (401), sauf /api/health
    ├── sap-ai-copilot-aicore  ─►  SAP Generative AI Hub
-   ├── sap-ai-copilot-s4      ─►  SAP S/4HANA Cloud (OData V4)
+   ├── sap-ai-copilot-destination ─►  destination ─►  SAP S/4HANA Cloud (OData V2 et V4)
    └── ChromaDB               ─►  index RAG embarqué au déploiement
 ```
 
@@ -253,12 +255,12 @@ sap-ai-copilot-backend     (Python, FastAPI)
 | `sap-ai-copilot-backend` | Application Python, 1 Go | API FastAPI, agent, RAG |
 | `sap-ai-copilot-xsuaa` | Service `xsuaa` / `application` | Authentification des utilisateurs |
 | `sap-ai-copilot-aicore` | Service user-provided | Identifiants SAP AI Core |
-| `sap-ai-copilot-s4` | Service user-provided | Clé API S/4HANA |
+| `sap-ai-copilot-destination` | Service `destination` / `lite` (gratuit) | Connexion au système S/4HANA |
 
 ### Prérequis BTP
 
 - Un sous-compte SAP BTP avec l'environnement Cloud Foundry, un space et le rôle **Space Developer**
-- Le service **xsuaa** (plan `application`) disponible dans le sous-compte
+- Les services **xsuaa** (plan `application`) et **destination** (plan `lite`) disponibles dans le sous-compte
 - La CLI Cloud Foundry v8 (`winget install CloudFoundry.CLI.v8`)
 - Un `.env` complet (identifiants AI Core et clé S/4HANA) et l'index RAG construit (`python -m app.rag.index_documents`)
 
@@ -272,12 +274,23 @@ cf login -a https://api.cf.<région>.hana.ondemand.com --sso
 Le script :
 
 1. construit le dossier `deploy/build` (non versionné) : code du backend sans les tests, index RAG, dépendances Python figées sur les versions testées en local, build SAPUI5 ;
-2. crée ou met à jour les trois services. Les secrets sont lus dans `.env` et transmis à Cloud Foundry par des fichiers temporaires, jamais en ligne de commande ;
+2. crée ou met à jour les trois services, dont la destination S/4HANA. Les secrets sont lus dans `.env` et transmis à Cloud Foundry par des fichiers temporaires, jamais en ligne de commande ;
 3. déploie le backend puis l'Application Router ;
 4. vérifie la sécurité : le backend doit répondre **401** à un appel sans jeton, sinon le script échoue ;
 5. affiche l'URL de l'application.
 
 Le script peut être relancé pour publier une nouvelle version. Il ne crée ou ne modifie que les ressources dont le nom commence par `sap-ai-copilot-`.
+
+### Connexion S/4HANA par destination
+
+Le backend lit le système S/4HANA (URL et authentification) auprès du **Destination service** de SAP BTP, avec la destination nommée par `SAP_DESTINATION_NAME`. C'est le Destination service qui gère l'authentification : il renvoie des en-têtes prêts à l'emploi pour `BasicAuthentication`, `OAuth2ClientCredentials`, `OAuth2SAMLBearerAssertion`, etc. Les propriétés additionnelles `URL.headers.<nom>` et `URL.queries.<nom>` sont ajoutées à chaque appel.
+
+- **Par défaut** (sandbox) : `deploy.ps1` crée une destination d'instance `sap-ai-copilot-s4` vers `SAP_API_BASE_URL` (le sandbox par défaut), avec la clé `SAP_API_KEY` en propriété `URL.headers.APIKey`.
+- **Autre système S/4HANA** : créer une destination HTTP au niveau du sous-compte (cockpit BTP > Connectivity > Destinations, type `Internet`), puis ajouter `BTP_S4_DESTINATION=<nom>` dans `.env` et relancer `deploy.ps1`. `SAP_API_KEY` n'est alors plus nécessaire. Aucune modification de code n'est nécessaire.
+
+La destination est relue toutes les 5 minutes au plus (moins si un jeton OAuth expire plus tôt), et immédiatement après une erreur 401 ou 403. Les destinations `OnPremise` (Cloud Connector) ne sont pas prises en charge. La page **Settings** indique le mode de connexion utilisé.
+
+En local, l'application se connecte directement avec `SAP_API_BASE_URL` et `SAP_API_KEY`.
 
 ### Vérifier
 
@@ -292,18 +305,18 @@ Le script peut être relancé pour publier une nouvelle version. Il ne crée ou 
 .\deploy\cleanup.ps1
 ```
 
-Supprime les deux applications (avec leurs routes) et les trois services, par leur nom exact, après confirmation.
+Supprime les deux applications (avec leurs routes) et les services `sap-ai-copilot-*`, par leur nom exact, après confirmation.
 
 ### Points d'attention
 
 - **Historique des conversations** : le disque d'une application Cloud Foundry est effacé à chaque redémarrage. Sur BTP, l'historique est donc temporaire. Une base gérée (SAP HANA Cloud ou PostgreSQL) le rendrait persistant.
-- **Secrets** : les services user-provided sont lisibles par les membres du space ayant le rôle Space Developer (`cf env`). Le Destination service et une liaison directe à une instance SAP AI Core sont les alternatives à privilégier en production.
+- **Secrets** : les identifiants SAP AI Core sont dans un service user-provided, lisible par les membres du space ayant le rôle Space Developer (`cf env`). Une liaison directe à une instance SAP AI Core est l'alternative à privilégier en production. La connexion S/4HANA passe déjà par le Destination service.
 - **Région** : le domaine `cfapps.eu10-005.hana.ondemand.com` est indiqué dans `deploy/manifest.yml` et `deploy/xs-security.json`. Il faut l'adapter pour une autre région.
 - **Pourquoi un jeton plutôt qu'une route interne** : rendre le backend accessible uniquement depuis l'Application Router via une règle réseau demande le droit `network.write`, rarement accordé aux développeurs. La validation du jeton XSUAA protège l'API de la même façon, sans droit particulier.
 
 ## Sécurité
 
-- Les identifiants SAP AI Core et la clé API S/4HANA restent côté serveur : dans `.env` en local (exclu du dépôt), dans des services Cloud Foundry sur BTP.
+- Les identifiants SAP AI Core et la clé API S/4HANA restent côté serveur : dans `.env` en local (exclu du dépôt). Sur BTP, ils sont dans un service Cloud Foundry pour AI Core et dans une destination BTP pour S/4HANA.
 - Sur BTP, toute l'application exige une connexion SAP (XSUAA) et l'API vérifie le jeton de chaque appel.
 - Les requêtes qui modifient des données (`POST`, `DELETE`) sont protégées par un jeton CSRF via l'Application Router.
 - L'accès à S/4HANA est en lecture seule (requêtes GET uniquement).
@@ -321,8 +334,7 @@ Les documents de `data/documents` servent de base documentaire au RAG.
 
 - Import et ré-indexation de documents depuis l'interface
 - Historique persistant sur SAP BTP (SAP HANA Cloud ou PostgreSQL)
-- Destination service pour la connexion S/4HANA, à la place de la clé API
 
 ## Stack technique
 
-SAPUI5 1.136 · UI5 Tooling 4 · FastAPI · SAP Generative AI Hub · SAP AI SDK · SAP S/4HANA Cloud OData V2 et V4 · SAP BTP Cloud Foundry · Application Router · XSUAA · ChromaDB · SQLite · Python 3.12
+SAPUI5 1.136 · UI5 Tooling 4 · FastAPI · SAP Generative AI Hub · SAP AI SDK · SAP S/4HANA Cloud OData V2 et V4 · SAP BTP Cloud Foundry · Application Router · XSUAA · Destination service · ChromaDB · SQLite · Python 3.12

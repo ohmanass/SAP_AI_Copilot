@@ -1,8 +1,8 @@
 """
 SAP S/4HANA Cloud data source (OData V4, API_PURCHASEORDER_2), read-only.
 
-Defaults to the SAP Business Accelerator Hub sandbox. Any S/4HANA Cloud
-system exposing the same API can be used by changing SAP_API_BASE_URL.
+Defaults to the SAP Business Accelerator Hub sandbox. The system is set by the
+SAP connection (app.sap_data.connection): a BTP destination or SAP_API_BASE_URL.
 """
 
 import os
@@ -10,9 +10,9 @@ import re
 import time
 from datetime import date, timedelta
 
+from app.sap_data.connection import get_connection
 from app.sap_data.odata_client import ODataClient, SAPODataError
 
-DEFAULT_BASE_URL = "https://sandbox.api.sap.com/s4hanacloud"
 PURCHASE_ORDER_SERVICE = "sap/opu/odata4/sap/api_purchaseorder_2/srvd_a2x/sap/purchaseorder/0001/"
 
 # OData V4 requires a unit when filtering on a quantity (SAP rule /IWBEP/CM_V4S_RUN/031)
@@ -37,10 +37,8 @@ class S4HanaODataSource:
     key = "odata"
 
     def __init__(self):
-        base_url = os.getenv("SAP_API_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
-        self.base_url = base_url
-        self.is_sandbox = "sandbox.api.sap.com" in base_url
-        self.client = ODataClient(f"{base_url}/{PURCHASE_ORDER_SERVICE}")
+        self.connection = get_connection()
+        self.client = ODataClient(PURCHASE_ORDER_SERVICE)
         self.units = [
             unit.strip() for unit in
             os.getenv("SAP_QUANTITY_UNITS", DEFAULT_QUANTITY_UNITS).split(",") if unit.strip()
@@ -48,13 +46,13 @@ class S4HanaODataSource:
 
     @property
     def label(self):
-        return "SAP S/4HANA Cloud sandbox" if self.is_sandbox else "SAP S/4HANA Cloud"
+        return self.connection.label
 
     def describe(self):
         return {
             "key": self.key,
             "label": self.label,
-            "system": self.base_url,
+            **self.connection.describe(),
             "api": "API_PURCHASEORDER_2 (OData V4)",
             "configured": self.client.configured
         }
@@ -295,7 +293,8 @@ class S4HanaODataSource:
     def status(self):
         info = self.describe()
         if not self.client.configured:
-            return {**info, "available": False, "error": "SAP_API_KEY missing", "latency_ms": None}
+            return {**info, "available": False, "error": self.connection.missing_configuration,
+                    "latency_ms": None}
 
         started = time.perf_counter()
         try:

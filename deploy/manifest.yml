@@ -1,6 +1,6 @@
 # Cloud Foundry manifest for SAP AI Copilot.
 # Used by deploy/deploy.ps1, which builds the "build/" folder first and
-# provides the variables ((genai_model)) and ((backend_host)).
+# provides the variables ((genai_model)), ((backend_host)) and ((s4_destination)).
 ---
 applications:
 
@@ -23,10 +23,11 @@ applications:
     env:
       SAP_DATA_SOURCE: odata
       GENAI_MODEL_NAME: ((genai_model))
+      SAP_DESTINATION_NAME: ((s4_destination))
     services:
       - sap-ai-copilot-xsuaa
       - sap-ai-copilot-aicore
-      - sap-ai-copilot-s4
+      - sap-ai-copilot-destination
 
   # Application Router: public URL, SAP login (XSUAA), serves the SAPUI5 app, proxies /api
   - name: sap-ai-copilot-approuter

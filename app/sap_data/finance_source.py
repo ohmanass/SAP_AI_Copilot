@@ -1,7 +1,7 @@
 """
 SAP S/4HANA Cloud supplier invoices and three-way match (SAP FI / MM invoice verification), read-only.
 
-APIs (same system and API key as the purchase order source):
+APIs (same SAP connection as the purchase order source):
   API_SUPPLIERINVOICE_PROCESS_SRV  supplier invoices and their purchase order items (OData V2)
   API_MATERIAL_DOCUMENT_SRV        goods receipts posted against purchase orders (OData V2)
   API_BUSINESS_PARTNER             supplier names (OData V2)
@@ -10,12 +10,12 @@ APIs (same system and API key as the purchase order source):
 Finance data is only available with SAP_DATA_SOURCE=odata: there is no FI demo dataset.
 """
 
-import os
 import re
 from datetime import datetime, timezone
 
 from app.sap_data.odata_client import ODataClient, SAPODataError
-from app.sap_data.odata_source import DEFAULT_BASE_URL, MAX_LIMIT, _literal, _valid_date
+from app.sap_data.connection import get_connection
+from app.sap_data.odata_source import MAX_LIMIT, _literal, _valid_date
 
 INVOICE_SERVICE = "sap/opu/odata/sap/API_SUPPLIERINVOICE_PROCESS_SRV/"
 MATERIAL_DOCUMENT_SERVICE = "sap/opu/odata/sap/API_MATERIAL_DOCUMENT_SRV/"
@@ -71,13 +71,15 @@ def _rows(body):
 class S4HanaFinanceSource:
 
     def __init__(self, purchase_order_source):
-        base_url = os.getenv("SAP_API_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
-        self.is_sandbox = "sandbox.api.sap.com" in base_url
-        self.label = "SAP S/4HANA Cloud sandbox" if self.is_sandbox else "SAP S/4HANA Cloud"
-        self.invoices = ODataClient(f"{base_url}/{INVOICE_SERVICE}")
-        self.material_documents = ODataClient(f"{base_url}/{MATERIAL_DOCUMENT_SERVICE}")
-        self.partners = ODataClient(f"{base_url}/{BUSINESS_PARTNER_SERVICE}")
+        self.connection = get_connection()
+        self.invoices = ODataClient(INVOICE_SERVICE)
+        self.material_documents = ODataClient(MATERIAL_DOCUMENT_SERVICE)
+        self.partners = ODataClient(BUSINESS_PARTNER_SERVICE)
         self.purchase_orders = purchase_order_source
+
+    @property
+    def label(self):
+        return self.connection.label
 
     # ------------------------------------------------------------------
     # Helpers

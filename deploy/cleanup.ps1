@@ -5,7 +5,8 @@
 .DESCRIPTION
     Deletes, by exact name only:
       apps      sap-ai-copilot-approuter, sap-ai-copilot-backend (with their routes)
-      services  sap-ai-copilot-xsuaa, sap-ai-copilot-aicore, sap-ai-copilot-s4
+      services  sap-ai-copilot-xsuaa, sap-ai-copilot-aicore, sap-ai-copilot-destination,
+                sap-ai-copilot-s4 (first versions)
 
 .PARAMETER Force
     Skip the confirmation prompt.
@@ -15,7 +16,7 @@ param(
 )
 
 $Apps     = "sap-ai-copilot-approuter", "sap-ai-copilot-backend"
-$Services = "sap-ai-copilot-xsuaa", "sap-ai-copilot-aicore", "sap-ai-copilot-s4"
+$Services = "sap-ai-copilot-xsuaa", "sap-ai-copilot-aicore", "sap-ai-copilot-destination", "sap-ai-copilot-s4"
 
 cf target
 if ($LASTEXITCODE -ne 0) { throw "Not logged in to Cloud Foundry." }
