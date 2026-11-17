@@ -76,7 +76,7 @@
 						<Column minScreenWidth="Tablet" demandPopin="true" hAlign="End">
 							<Text text="{i18n>kbColSize}"/>
 						</Column>
-						<Column hAlign="End">
+						<Column hAlign="End" minScreenWidth="28rem" demandPopin="true">
 							<Text text="{i18n>kbColChunks}"/>
 						</Column>
 						<Column>

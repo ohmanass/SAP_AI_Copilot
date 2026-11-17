@@ -31,6 +31,10 @@ sap.ui.define([
 	const numberFormat = NumberFormat.getFloatInstance({ maxFractionDigits: 3, groupingEnabled: true });
 	const integerFormat = NumberFormat.getIntegerInstance({ groupingEnabled: true });
 
+	// Below this table width, columns from the third one move into the row popin
+	const POPIN_WIDTH = "32rem";
+	const POPIN_WIDTH_PX = 32 * 16;
+
 	// Semantic colours of SAP statuses (purchase orders and sales orders)
 	const STATUS_STATES = {
 		OVERDUE: "Error",
@@ -222,7 +226,7 @@ sap.ui.define([
 						if (index > 0 && column.importance === "low") {
 							Object.assign(settings, { minScreenWidth: "60rem", demandPopin: true, importance: "Low" });
 						} else if (index > 1) {
-							Object.assign(settings, { minScreenWidth: "32rem", demandPopin: true, importance: "Medium" });
+							Object.assign(settings, { minScreenWidth: POPIN_WIDTH, demandPopin: true, importance: "Medium" });
 						}
 						return new Column(settings);
 					}),
@@ -243,9 +247,24 @@ sap.ui.define([
 				// The registration is removed automatically when the container is destroyed.
 				const applyWidth = () => {
 					const domRef = container.getDomRef();
-					const width = domRef ? Math.floor(domRef.clientWidth) : 0;
-					if (width && sapTable.getContextualWidth() !== `${width}px`) {
+					if (!domRef) {
+						return;
+					}
+					// Content width of the card (clientWidth includes its padding)
+					const style = getComputedStyle(domRef);
+					const width = Math.floor(domRef.clientWidth
+						- parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
+					if (width <= 0) {
+						return;
+					}
+					if (sapTable.getContextualWidth() !== `${width}px`) {
 						sapTable.setContextualWidth(`${width}px`);
+					}
+					// With popins (narrow card), an automatic layout lets the popin row widen the
+					// table past the card: a fixed layout keeps it exactly at the card width.
+					const narrow = width < POPIN_WIDTH_PX;
+					if (sapTable.getFixedLayout() !== narrow) {
+						sapTable.setFixedLayout(narrow);
 					}
 				};
 				container.addEventDelegate({

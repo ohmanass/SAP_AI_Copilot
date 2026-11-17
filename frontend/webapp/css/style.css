@@ -418,6 +418,10 @@ html, body.cpBody {
 	margin-top: 0.125rem;
 	font-size: 0.75rem;
 	color: var(--cp-muted);
+	/* One line: on narrow screens it must not push the conversation title away */
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .cpStatusPill {
@@ -979,6 +983,12 @@ html, body.cpBody {
 	color: var(--cp-cyan-soft);
 }
 
+/* UI5 "GridSmall" popins use columns of at least 13rem: on a phone the card is
+   narrower, so a column may shrink to the available width instead of overflowing */
+.cpDataGrid .sapMListTblSubCntGridSmall {
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+}
+
 /* Numbers, dates and statuses stay on one line */
 .cpDataGrid .sapMObjectNumber,
 .cpDataGrid .sapMObjStatus,
@@ -1340,7 +1350,7 @@ html, body.cpBody {
 
 .cpCardGrid.sapMFlexBox {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
 	gap: 1rem;
 }
 
@@ -1403,6 +1413,8 @@ html, body.cpBody {
 }
 
 .cpRowValue.sapMText {
+	/* A flex item does not shrink below its content without it: long URLs would overflow */
+	min-width: 0;
 	font-size: 0.8125rem;
 	font-weight: 500;
 	text-align: right;
@@ -1481,7 +1493,7 @@ html, body.cpBody {
 /* ---------- Modules ---------- */
 .cpModuleGrid.sapMFlexBox {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr));
 	gap: 1rem;
 }
 
@@ -1762,6 +1774,39 @@ html, body.cpBody {
 	}
 
 	.cpStatusPill .sapMText {
+		display: none;
+	}
+}
+
+@media (max-width: 480px) {
+	/* Phones: the conversation title gets the whole header; the model and system are in Settings */
+	.cpTopbarMeta.sapMText {
+		display: none;
+	}
+
+	/* Page headers: smaller title, icon-only action button */
+	.cpPageTitle.sapMTitle {
+		font-size: 1.375rem;
+	}
+
+	/* Hidden visually only: screen readers still announce the button text */
+	.cpPageHeader .cpGhostBtn .sapMBtnContent {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+
+	/* Module cards: the status badge moves under the title when it does not fit */
+	.cpModuleHead {
+		flex-wrap: wrap;
+		row-gap: 0.5rem;
+	}
+
+	/* Knowledge Base: no document icon, the name and path get the room */
+	.cpDocIcon.sapUiIcon {
 		display: none;
 	}
 }
