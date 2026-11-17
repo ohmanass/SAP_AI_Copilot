@@ -693,6 +693,125 @@ html, body.cpBody {
 	color: var(--cp-muted);
 }
 
+/* Feedback on an answer: the chosen thumb stays coloured and visible */
+.cpMsgFooter[data-rating="1"],
+.cpMsgFooter[data-rating="-1"] {
+	opacity: 1;
+}
+
+.cpMsgFooter[data-rating="1"] .cpThumbUp .sapMBtnIcon {
+	color: #4ade80;
+}
+
+.cpMsgFooter[data-rating="-1"] .cpThumbDown .sapMBtnIcon {
+	color: #f87171;
+}
+
+.cpFeedbackBody {
+	padding: 0.75rem 1rem 0.25rem;
+}
+
+/* ---------------- Feedback page ---------------- */
+.cpKpiIconPositive.sapUiIcon {
+	color: #4ade80;
+}
+
+.cpKpiIconNegative.sapUiIcon {
+	color: #f87171;
+}
+
+.cpFeedbackToolbar {
+	display: flex;
+	margin: 0.25rem 0 0.75rem;
+}
+
+.cpFeedbackList.sapMList .sapMLIB {
+	padding: 0;
+	border: none;
+	background: transparent;
+}
+
+.cpFeedbackList.sapMList .sapMLIB:hover,
+.cpFeedbackList.sapMList .sapMLIB:focus {
+	background: transparent;
+}
+
+.cpFeedbackItem {
+	margin-bottom: 0.75rem;
+}
+
+.cpFeedbackCard.cpCard {
+	width: 100%;
+	gap: 0.5rem;
+	padding: 1rem 1.125rem;
+}
+
+.cpFeedbackItem[data-rating="-1"] .cpFeedbackCard {
+	border-left: 3px solid #f87171;
+}
+
+.cpFeedbackItem[data-rating="1"] .cpFeedbackCard {
+	border-left: 3px solid #4ade80;
+}
+
+.cpFeedbackHead {
+	display: flex;
+	gap: 0.875rem;
+}
+
+.cpFeedbackRating.sapUiIcon {
+	flex: none;
+	margin-top: 0.125rem;
+	font-size: 1rem;
+	color: #f87171;
+}
+
+.cpFeedbackItem[data-rating="1"] .cpFeedbackRating.sapUiIcon {
+	color: #4ade80;
+}
+
+.cpFeedbackMain {
+	display: flex;
+	flex-direction: column;
+	gap: 0.375rem;
+	min-width: 0;
+	flex: 1 1 auto;
+}
+
+.cpFeedbackQuestion.sapMText {
+	font-weight: 600;
+	color: var(--cp-text);
+}
+
+.cpFeedbackAnswer.sapMText {
+	font-size: 0.875rem;
+	color: var(--cp-text-2);
+}
+
+.cpFeedbackComment.sapMText {
+	padding: 0.5rem 0.75rem;
+	border-radius: 8px;
+	background: rgba(248, 113, 113, 0.1);
+	font-size: 0.875rem;
+	font-style: italic;
+	color: var(--cp-text);
+}
+
+.cpFeedbackItem[data-rating="1"] .cpFeedbackComment.sapMText {
+	background: rgba(74, 222, 128, 0.1);
+}
+
+.cpFeedbackMeta.sapMText {
+	font-size: 0.75rem;
+	color: var(--cp-muted);
+}
+
+.cpFeedbackActions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+
 /* Markdown answers */
 .cpMarkdown {
 	font-size: 0.9375rem;

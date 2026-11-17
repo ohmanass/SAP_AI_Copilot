@@ -228,6 +228,26 @@ sap.ui.define([
 			});
 		},
 
+		/** Feedback on an answer: rating 1 (useful) or -1 (not useful), optional comment. */
+		setFeedback(sessionId, messageId, rating, comment) {
+			return this._request(
+				`sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}/feedback`,
+				{ method: "PUT", body: { rating, comment: comment || "" } }
+			);
+		},
+
+		deleteFeedback(sessionId, messageId) {
+			return this._request(
+				`sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}/feedback`,
+				{ method: "DELETE" }
+			);
+		},
+
+		/** Feedback review (every user's for a reviewer); rating: 1, -1 or null for all. */
+		getFeedback(rating) {
+			return this._request(rating ? `feedback?rating=${rating}` : "feedback");
+		},
+
 		deleteKnowledgeDocument(name) {
 			return this._request(`knowledge-base/documents/${encodeURIComponent(name)}`, { method: "DELETE" });
 		},

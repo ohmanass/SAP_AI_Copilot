@@ -115,6 +115,11 @@
 					"target": "knowledgeBase"
 				},
 				{
+					"name": "feedback",
+					"pattern": "feedback",
+					"target": "feedback"
+				},
+				{
 					"name": "settings",
 					"pattern": "settings",
 					"target": "settings"
@@ -134,6 +139,11 @@
 				"knowledgeBase": {
 					"id": "knowledgeBase",
 					"name": "KnowledgeBase",
+					"level": 1
+				},
+				"feedback": {
+					"id": "feedback",
+					"name": "Feedback",
 					"level": 1
 				},
 				"settings": {

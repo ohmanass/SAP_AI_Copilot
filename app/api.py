@@ -21,7 +21,7 @@ from app.attachments import reader as attachment_reader
 from app.attachments import sensitive as attachment_sensitive
 from app.modules import MODULES, get_module
 from app.rag import knowledge_store
-from app.storage import chat_store
+from app.storage import chat_store, feedback_store
 
 
 logger = logging.getLogger("sap_ai_copilot.api")
@@ -74,11 +74,12 @@ NOT_FOUND = "Conversation not found."
 
 
 def save_exchange_safely(**exchange):
-    """The answer is shown even if the history cannot be saved."""
+    """The answer is shown even if the history cannot be saved. Returns the answer's message id or None."""
     try:
-        chat_store.save_exchange(**exchange)
+        return chat_store.save_exchange(**exchange)
     except chat_store.StoreUnavailable as error:
         logger.warning("Exchange not saved, chat history unavailable: %s", error)
+        return None
 
 # One agent per conversation (rehydrated from chat history after a restart)
 agents = {}
@@ -112,6 +113,8 @@ class ChatResponse(BaseModel):
     module: str | None = None
     # SAP data tables built from the tool results (see app.agent.data_tables)
     tables: list[dict] = []
+    # Id of the stored answer (feedback); None when the history is unavailable
+    message_id: int | None = None
 
 
 def check_session_owner(session_id: str, owner: str):
@@ -193,7 +196,7 @@ def chat(request: ChatRequest, user: str = Depends(current_user)):
         with lock:
             result = agent.ask_with_details(request.message + attachment_reader.note(attachments))
 
-        save_exchange_safely(
+        message_id = save_exchange_safely(
             session_id=session_id,
             owner=user,
             user_message=request.message,
@@ -211,7 +214,8 @@ def chat(request: ChatRequest, user: str = Depends(current_user)):
             sources=result["sources"],
             tools_used=result["tools_used"],
             module=module_key(agent),
-            tables=result["tables"]
+            tables=result["tables"],
+            message_id=message_id
         )
 
     except Exception as error:
@@ -230,7 +234,7 @@ def chat_stream(request: ChatRequest, user: str = Depends(current_user)):
       tool_start   {"type", "name"}
       tool_end     {"type", "name", "success"}
       token        {"type", "content"}
-      done         {"type", "session_id", "response", "sources", "tools_used", "tables"}
+      done         {"type", "session_id", "response", "sources", "tools_used", "tables", "message_id"}
       error        {"type", "message"}
     """
 
@@ -252,7 +256,7 @@ def chat_stream(request: ChatRequest, user: str = Depends(current_user)):
                         yield event_line(event)
                         continue
 
-                    save_exchange_safely(
+                    message_id = save_exchange_safely(
                         session_id=session_id,
                         owner=user,
                         user_message=request.message,
@@ -263,7 +267,8 @@ def chat_stream(request: ChatRequest, user: str = Depends(current_user)):
                         tables=event["tables"],
                         attachments=attachments
                     )
-                    yield event_line({**event, "session_id": session_id, "module": module_key(agent)})
+                    yield event_line({**event, "session_id": session_id, "module": module_key(agent),
+                                      "message_id": message_id})
 
             except Exception:
                 logger.exception("Streaming chat request failed")
@@ -328,6 +333,41 @@ def delete_session(session_id: str, user: str = Depends(current_user)):
         session_locks.pop(session_id, None)
 
     return {"deleted": session_id}
+
+
+# ----------------------------------------------------------------------
+# Feedback on answers
+# ----------------------------------------------------------------------
+
+class FeedbackRequest(BaseModel):
+    rating: int = Field(description="1 (useful) or -1 (not useful)")
+    comment: str = Field(default="", max_length=feedback_store.COMMENT_MAX_LENGTH)
+
+
+@app.put("/api/sessions/{session_id}/messages/{message_id}/feedback")
+def set_message_feedback(session_id: str, message_id: int, request: FeedbackRequest,
+                         user: str = Depends(current_user)):
+    if request.rating not in (1, -1):
+        raise HTTPException(status_code=422, detail="The rating must be 1 or -1.")
+    feedback = feedback_store.set_feedback(session_id, user, message_id, request.rating, request.comment)
+    if feedback is None:
+        raise HTTPException(status_code=404, detail="Answer not found.")
+    return feedback
+
+
+@app.delete("/api/sessions/{session_id}/messages/{message_id}/feedback")
+def delete_message_feedback(session_id: str, message_id: int, user: str = Depends(current_user)):
+    if not feedback_store.delete_feedback(session_id, user, message_id):
+        raise HTTPException(status_code=404, detail="Feedback not found.")
+    return {"deleted": message_id}
+
+
+@app.get("/api/feedback")
+def list_feedback(request: Request, rating: int | None = None, user: str = Depends(current_user)):
+    """Feedback review: every user's feedback for a reviewer, the user's own otherwise."""
+    if rating not in (None, 1, -1):
+        raise HTTPException(status_code=422, detail="The rating must be 1 or -1.")
+    return feedback_store.review(user, auth.is_reviewer(request), rating)
 
 
 @app.get("/api/knowledge-base")

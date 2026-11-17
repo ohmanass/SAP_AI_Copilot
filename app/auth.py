@@ -12,6 +12,10 @@ The identity of the signed-in user is taken from the validated token only
 (never from a header the browser could set) and made available to the API as
 request.state.user: "<identity provider origin>/<logon name>". Locally it is
 always LOCAL_USER.
+
+request.state.reviewer is True when the user holds the FeedbackReview scope
+(role collection "SAP AI Copilot Feedback Reviewer", see deploy/xs-security.json):
+they see the feedback of every user. Locally the single user is a reviewer.
 """
 
 import json
@@ -29,9 +33,20 @@ PUBLIC_PATHS = {"/api/health"}
 LOCAL_USER = "local"
 
 
+# Scope of the feedback review (deploy/xs-security.json)
+REVIEW_SCOPE = "FeedbackReview"
+
+
 def current_user(request) -> str:
     """Identity of the caller (FastAPI dependency)."""
     return getattr(request.state, "user", None) or LOCAL_USER
+
+
+def is_reviewer(request) -> bool:
+    """May see the feedback of every user: FeedbackReview scope on BTP, always locally."""
+    if getattr(request.state, "user", None) is None:
+        return True        # no XSUAA binding: local development, single user
+    return bool(getattr(request.state, "reviewer", False))
 
 
 def user_identity(context) -> str:
@@ -76,20 +91,23 @@ class XsuaaAuthMiddleware:
 
         try:
             # May fetch the XSUAA signing keys (cached): run outside the event loop
-            user = await to_thread.run_sync(self._validate, token)
+            user, reviewer = await to_thread.run_sync(self._validate, token)
         except Exception as error:
             logger.warning("Rejected token: %s", type(error).__name__)
             await self._reject(send, "Invalid or expired token.")
             return
 
         # Read by FastAPI as request.state.user
-        scope.setdefault("state", {})["user"] = user
+        state = scope.setdefault("state", {})
+        state["user"] = user
+        state["reviewer"] = reviewer
         await self.app(scope, receive, send)
 
     def _validate(self, token):
         from sap import xssec
 
-        return user_identity(xssec.create_security_context(token, self.credentials))
+        context = xssec.create_security_context(token, self.credentials)
+        return user_identity(context), bool(context.check_local_scope(REVIEW_SCOPE))
 
     @staticmethod
     def _bearer_token(scope):

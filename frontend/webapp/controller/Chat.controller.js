@@ -494,7 +494,8 @@ sap.ui.define([
 				content: done.response,
 				sources: done.sources,
 				tools_used: done.tools_used,
-				tables: done.tables
+				tables: done.tables,
+				id: done.message_id
 			}));
 
 			if (!stream.sessionId) {
@@ -586,6 +587,76 @@ sap.ui.define([
 				ConversationExport.downloadMarkdown(this, conversation);
 				MessageToast.show(this.getText("exportDone"));
 			}
+		},
+
+		/* ======================= Feedback on answers ======================= */
+
+		onFeedbackUseful(event) {
+			const context = event.getSource().getBindingContext("chat");
+			this._rate(context, context.getProperty("rating") === 1 ? 0 : 1);
+		},
+
+		/** 👎: saved at once, then a comment can be added ("what was wrong?"). */
+		async onFeedbackNotUseful(event) {
+			const button = event.getSource();
+			const context = button.getBindingContext("chat");
+			if (context.getProperty("rating") === -1) {
+				this._rate(context, 0);
+				return;
+			}
+			if (await this._rate(context, -1)) {
+				this._openFeedbackComment(button, context);
+			}
+		},
+
+		/** Saves (1 / -1) or removes (0) the feedback; the button state changes at once. */
+		async _rate(context, rating, comment) {
+			const sessionId = this._chat().getProperty("/sessionId");
+			const messageId = context.getProperty("id");
+			const previous = context.getProperty("rating");
+			const model = context.getModel();
+			model.setProperty("rating", rating, context);
+			try {
+				if (rating) {
+					const saved = await this.getService().setFeedback(sessionId, messageId, rating, comment || "");
+					model.setProperty("feedbackComment", saved.comment, context);
+					if (rating === 1 || comment) {
+						MessageToast.show(this.getText("feedbackThanks"));
+					}
+				} else {
+					await this.getService().deleteFeedback(sessionId, messageId);
+					model.setProperty("feedbackComment", "", context);
+				}
+				return true;
+			} catch (error) {
+				model.setProperty("rating", previous, context);
+				MessageToast.show(this.getText("feedbackFailed", [error.detail || this.describeError(error)]));
+				return false;
+			}
+		},
+
+		async _openFeedbackComment(button, context) {
+			if (!this._feedbackPopover) {
+				this._feedbackPopover = await this.loadFragment({
+					name: "com.sapaicopilot.app.view.fragment.FeedbackComment"
+				});
+				this.getView().setModel(new JSONModel({ comment: "" }), "feedback");
+			}
+			this._feedbackContext = context;
+			this.getView().getModel("feedback").setProperty("/comment", context.getProperty("feedbackComment") || "");
+			this._feedbackPopover.openBy(button);
+		},
+
+		async onFeedbackCommentSend() {
+			const comment = this.getView().getModel("feedback").getProperty("/comment").trim();
+			this._feedbackPopover.close();
+			if (comment && this._feedbackContext) {
+				await this._rate(this._feedbackContext, -1, comment);
+			}
+		},
+
+		onFeedbackCommentSkip() {
+			this._feedbackPopover.close();
 		},
 
 		/* ======================= Message actions ======================= */
@@ -689,6 +760,10 @@ sap.ui.define([
 				})),
 				tables: raw.tables || [],
 				attachments: raw.attachments || [],
+				// Stored answer: id for the feedback, and the user's rating (1, -1 or 0)
+				id: raw.id || null,
+				rating: raw.feedback ? raw.feedback.rating : 0,
+				feedbackComment: raw.feedback ? raw.feedback.comment : "",
 				sources: (raw.sources || []).map((source) => Object.assign({}, source, {
 					label: source.chunk === null || source.chunk === undefined
 						? source.source

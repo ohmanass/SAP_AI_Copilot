@@ -105,6 +105,25 @@ CREATE TABLE IF NOT EXISTS kb_documents (
     created_at TEXT NOT NULL,
     masked TEXT
 );
+
+-- Feedback on answers: one per answer (message_id of the assistant message).
+-- The question and the answer are copied so the review page reads one table.
+CREATE TABLE IF NOT EXISTS feedback (
+    message_id INTEGER PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    owner TEXT NOT NULL,
+    rating INTEGER NOT NULL CHECK (rating IN (-1, 1)),
+    user_comment TEXT,
+    module TEXT,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    tools_used TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_updated
+    ON feedback(updated_at);
 """
 
 # Columns added after the first versions of the SQLite file: (table, column, definition)
@@ -181,6 +200,20 @@ HANA_TABLES = {
             owner NVARCHAR(256),
             masked NVARCHAR(500)
         )""",
+    "FEEDBACK": """
+        CREATE COLUMN TABLE feedback (
+            message_id BIGINT PRIMARY KEY,
+            session_id NVARCHAR(100) NOT NULL,
+            owner NVARCHAR(256) NOT NULL,
+            rating TINYINT NOT NULL,
+            user_comment NVARCHAR(2000),
+            module NVARCHAR(20),
+            question NCLOB NOT NULL,
+            answer NCLOB NOT NULL,
+            tools_used NVARCHAR(2000) NOT NULL,
+            created_at NVARCHAR(40) NOT NULL,
+            updated_at NVARCHAR(40) NOT NULL
+        )""",
 }
 
 HANA_INDEXES = {
@@ -188,6 +221,7 @@ HANA_INDEXES = {
     "IDX_ATTACHMENTS_SESSION": "CREATE INDEX idx_attachments_session ON attachments(session_id, attachment_id)",
     "IDX_CONVERSATIONS_OWNER": "CREATE INDEX idx_conversations_owner ON conversations(owner, updated_at)",
     "IDX_KB_CHUNKS_SOURCE": "CREATE INDEX idx_kb_chunks_source ON kb_chunks(source, chunk_index)",
+    "IDX_FEEDBACK_UPDATED": "CREATE INDEX idx_feedback_updated ON feedback(updated_at)",
 }
 
 # Columns added after the first HANA tables: (table, column, definition)

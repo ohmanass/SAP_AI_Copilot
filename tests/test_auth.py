@@ -46,7 +46,7 @@ def test_middleware_sets_the_validated_user_and_ignores_headers(monkeypatch):
         seen["user"] = scope["state"]["user"]
 
     middleware = auth.XsuaaAuthMiddleware(app, credentials={})
-    monkeypatch.setattr(middleware, "_validate", lambda token: "sap.default/alice@example.com")
+    monkeypatch.setattr(middleware, "_validate", lambda token: ("sap.default/alice@example.com", False))
     scope = {
         "type": "http",
         "path": "/api/sessions",

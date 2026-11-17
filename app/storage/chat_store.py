@@ -107,7 +107,7 @@ def save_exchange(
     tables: list | None = None,
     attachments: list | None = None
 ):
-    """Store one user/assistant exchange, creating the conversation if needed."""
+    """Store one user/assistant exchange, creating the conversation if needed. Returns the answer's message id."""
 
     now = _now()
 
@@ -127,27 +127,25 @@ def save_exchange(
                 (session_id, build_title(user_message), now, now, module, owner)
             )
 
-        cursor.executemany(
-            """
+        insert = """
             INSERT INTO messages
                 (session_id, role, content, sources, tools_used, tables, attachments, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                (session_id, "user", user_message, "[]", "[]", "[]",
-                 json.dumps(attachments or [], ensure_ascii=False), now),
-                (
-                    session_id,
-                    "assistant",
-                    assistant_message,
-                    json.dumps(sources, ensure_ascii=False),
-                    json.dumps(tools_used, ensure_ascii=False),
-                    json.dumps(tables or [], ensure_ascii=False),
-                    "[]",
-                    now
-                )
-            ]
-        )
+            """
+        cursor.execute(insert, (session_id, "user", user_message, "[]", "[]", "[]",
+                                json.dumps(attachments or [], ensure_ascii=False), now))
+        cursor.execute(insert, (
+            session_id,
+            "assistant",
+            assistant_message,
+            json.dumps(sources, ensure_ascii=False),
+            json.dumps(tools_used, ensure_ascii=False),
+            json.dumps(tables or [], ensure_ascii=False),
+            "[]",
+            now
+        ))
+        # Id of the answer: the feedback buttons refer to it
+        return int(cursor.last_id())
 
 
 def list_conversations(owner: str):
@@ -187,10 +185,12 @@ def get_conversation(session_id: str, owner: str):
 
         rows = cursor.execute(
             """
-            SELECT role, content, sources, tools_used, tables, attachments, created_at
-            FROM messages
-            WHERE session_id = ?
-            ORDER BY message_id ASC
+            SELECT m.message_id, m.role, m.content, m.sources, m.tools_used, m.tables, m.attachments,
+                   m.created_at, f.rating, f.user_comment
+            FROM messages m
+            LEFT JOIN feedback f ON f.message_id = m.message_id
+            WHERE m.session_id = ?
+            ORDER BY m.message_id ASC
             """,
             (session_id,)
         ).fetchall()
@@ -204,7 +204,11 @@ def get_conversation(session_id: str, owner: str):
             "tools_used": json.loads(row["tools_used"]),
             "tables": json.loads(row["tables"]),
             "attachments": json.loads(row["attachments"]),
-            "created_at": row["created_at"]
+            "created_at": row["created_at"],
+            "id": int(row["message_id"]),
+            # Feedback of the user on an answer, or None
+            "feedback": {"rating": int(row["rating"]), "comment": row["user_comment"] or ""}
+            if row["rating"] is not None else None
         }
         for row in rows
     ]
@@ -230,6 +234,8 @@ def delete_conversation(session_id: str, owner: str) -> bool:
             return False
         cursor.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
         cursor.execute("DELETE FROM attachments WHERE session_id = ? AND owner = ?", (session_id, owner))
+        # The feedback copies the question and the answer: it goes with the conversation
+        cursor.execute("DELETE FROM feedback WHERE session_id = ? AND owner = ?", (session_id, owner))
         return True
 
 

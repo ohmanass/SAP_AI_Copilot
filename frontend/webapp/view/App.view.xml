@@ -46,6 +46,7 @@
 						<tnt:NavigationListItem key="chat" text="{i18n>navChat}" icon="sap-icon://discussion-2"/>
 						<tnt:NavigationListItem key="modules" text="{i18n>navModules}" icon="sap-icon://grid"/>
 						<tnt:NavigationListItem key="knowledgeBase" text="{i18n>navKnowledgeBase}" icon="sap-icon://course-book"/>
+						<tnt:NavigationListItem key="feedback" text="{i18n>navFeedback}" icon="sap-icon://feedback"/>
 						<tnt:NavigationListItem key="settings" text="{i18n>navSettings}" icon="sap-icon://action-settings"/>
 					</tnt:NavigationList>
 

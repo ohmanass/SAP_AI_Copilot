@@ -28,6 +28,7 @@ L'application fonctionne en local et se déploie sur **SAP BTP (Cloud Foundry)**
 
 - Réponses en streaming : l'outil en cours d'exécution s'affiche en direct (« Reading purchase order data », « Searching the knowledge base »), puis le texte apparaît progressivement. Un bouton **Stop** interrompt la génération sans rien enregistrer
 - Chat : envoi avec Entrée, retour à la ligne avec Shift + Entrée, indicateur de génération, rendu Markdown, copie des réponses et bouton « Copier » sur chaque bloc de code (CDS views, ABAP, commandes…), gestion des erreurs avec bouton « Réessayer »
+- **Avis sur les réponses** : 👍 / 👎 sous chaque réponse, avec un commentaire facultatif après un 👎 (« What was wrong? »), enregistrés dans l'historique (SAP HANA Cloud sur BTP). La page **Feedback** affiche le taux de satisfaction et les derniers avis, filtrables ; un avis peut être copié comme **cas d'évaluation** (`Case(...)` à coller dans `evals/agent_eval.py`) pour qu'une mauvaise réponse ne revienne pas. Chacun voit ses propres avis ; les utilisateurs ayant la collection de rôles **SAP AI Copilot Feedback Reviewer** (créée par `deploy.ps1`, à attribuer dans le cockpit BTP : *Security > Users*) voient ceux de tous les utilisateurs. Un avis est supprimé avec sa conversation
 - **Export d'une conversation** (bouton de téléchargement en haut du chat) : fichier **Markdown** (`.md`) pour un ticket, un wiki ou un mail, ou **PDF** via la boîte d'impression du navigateur (« Enregistrer au format PDF »), mise en page claire. Questions, réponses, tableaux de données SAP avec leurs valeurs formatées, outils utilisés, sources et documents joints ; construit dans le navigateur (`util/ConversationExport.js`), sans bibliothèque ni appel au serveur
 - Sources RAG affichées sous chaque réponse, avec l'extrait réellement récupéré dans la base vectorielle et sa distance
 - Outils utilisés par l'agent affichés pour chaque réponse
@@ -127,7 +128,9 @@ SAP_AI_Copilot/
 | `POST` | `/api/chat/stream` | Même requête, réponse en flux NDJSON : `session`, `tool_start`, `tool_end`, `token`, `done` (avec `tables`), `error` |
 | `GET` | `/api/sessions` | Liste des conversations |
 | `GET` | `/api/sessions/{id}` | Messages d'une conversation |
-| `DELETE` | `/api/sessions/{id}` | Supprime une conversation (et ses documents joints) |
+| `DELETE` | `/api/sessions/{id}` | Supprime une conversation (et ses documents joints et avis) |
+| `PUT` / `DELETE` | `/api/sessions/{id}/messages/{message_id}/feedback` | Avis sur une réponse (`rating` 1 ou -1, `comment` facultatif) / suppression |
+| `GET` | `/api/feedback?rating=` | Statistiques et derniers avis (de tous les utilisateurs pour un relecteur) |
 | `POST` | `/api/sessions/{id}/attachments` | Joint un document (multipart, champ `file`) ; la conversation peut ne pas encore exister. Renvoie l'`id`, le nom, le nombre de pages et de caractères |
 | `GET` | `/api/sessions/{id}/attachments` | Documents joints à une conversation |
 | `DELETE` | `/api/sessions/{id}/attachments/{attachment_id}` | Retire un document joint |
@@ -253,6 +256,7 @@ L'application s'ouvre sur `http://localhost:8080/index.html`. Le serveur de dév
 `python -m pytest` lance les tests du backend. Ils simulent toutes les réponses externes (S/4HANA, Destination service) : ils tournent hors ligne, sans clé ni identifiants, en moins d'une seconde. Ils couvrent :
 
 - le **rapprochement à trois** : chaque statut, retours et annulations d'entrées, avoirs, factures annulées, débits ultérieurs, tolérance de prix, solde GR/IR, numéros de poste au format différent selon l'API ;
+- les **avis** : identifiant de la réponse renvoyé par le chat, avis enregistré, modifié, supprimé, visible dans l'historique, refusé sur la réponse d'un autre utilisateur ou sur une question, statistiques et filtre, périmètre utilisateur / relecteur, secrets masqués dans un commentaire, suppression avec la conversation ;
 - l'**historique** : conversations, messages, documents joints, textes longs et unicode, **isolation entre utilisateurs** (lecture, modification, suppression, envoi de messages et de documents dans la conversation d'un autre), migration des anciens fichiers SQLite et des tables HANA, démarrage sans base disponible. Les mêmes tests tournent sur SAP HANA Cloud quand `HANA_TEST_KEY_FILE` désigne la clé d'un service `hana` (`cf service-key …`) ;
 - le **déploiement** : le backend démarre sans ChromaDB (comme sur BTP) et utilise le HANA Vector Engine ;
 - l'**identité** : utilisateur tiré du jeton validé uniquement (un en-tête envoyé par le navigateur est ignoré), refus sans jeton ;
@@ -358,7 +362,7 @@ Supprime les deux applications (avec leurs routes) et les services `sap-ai-copil
 - Les identifiants SAP AI Core et la clé API S/4HANA restent côté serveur : dans `.env` en local (exclu du dépôt). Sur BTP, ils sont dans un service Cloud Foundry pour AI Core et dans une destination BTP pour S/4HANA.
 - Sur BTP, toute l'application exige une connexion SAP (XSUAA) et l'API vérifie le jeton de chaque appel.
 - **Historique par utilisateur** : chaque conversation et chaque document joint appartient à l'utilisateur connecté, identifié par le jeton XSUAA validé (fournisseur d'identité + nom de connexion), jamais par une information envoyée par le navigateur. Un utilisateur ne voit, ne reprend, ne renomme et ne supprime que ses conversations ; l'agent ne lit que ses documents. Une conversation d'un autre utilisateur répond comme une conversation inexistante (404). En local, sans connexion SAP, l'historique appartient à l'utilisateur `local`.
-- Les requêtes qui modifient des données (`POST`, `DELETE`) sont protégées par un jeton CSRF via l'Application Router.
+- Les requêtes qui modifient des données (`POST`, `PUT`, `DELETE`) sont protégées par un jeton CSRF via l'Application Router.
 - **Images et pages scannées** : elles sont envoyées une fois au modèle de SAP Generative AI Hub pour être transcrites (comme le texte des questions) ; seule la transcription est stockée, après masquage des données sensibles.
 - **Données sensibles masquées** avant tout stockage et tout envoi au modèle (`app/attachments/sensitive.py`) : mots de passe, secrets, clés d'API, jetons, clés privées et numéros de carte (somme de contrôle Luhn) dans les documents joints comme dans la base de connaissances ; les IBAN (somme de contrôle ISO 13616) aussi dans la base de connaissances, partagée. Dans un CSV ou un classeur Excel, toute la colonne dont l'en-tête nomme un secret (« PASSWORD », « Mot de passe », « api_key »…) est masquée. La valeur est remplacée par « [masked …] » et n'est conservée nulle part ; l'utilisateur voit ce qui a été masqué et l'agent répond qu'une valeur est masquée au lieu de l'inventer. Les documents enregistrés avant cette protection sont vérifiés une fois au démarrage du backend.
 - L'accès à S/4HANA est en lecture seule (requêtes GET uniquement).

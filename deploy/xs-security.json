@@ -2,6 +2,26 @@
   "xsappname": "sap-ai-copilot",
   "tenant-mode": "dedicated",
   "description": "SAP AI Copilot - user authentication",
+  "scopes": [
+    {
+      "name": "$XSAPPNAME.FeedbackReview",
+      "description": "Review the feedback of every user on the assistant's answers"
+    }
+  ],
+  "role-templates": [
+    {
+      "name": "FeedbackReviewer",
+      "description": "Reviews the feedback of every user",
+      "scope-references": ["$XSAPPNAME.FeedbackReview"]
+    }
+  ],
+  "role-collections": [
+    {
+      "name": "SAP AI Copilot Feedback Reviewer",
+      "description": "Sees the feedback of every user on the Feedback page of SAP AI Copilot",
+      "role-template-references": ["$XSAPPNAME.FeedbackReviewer"]
+    }
+  ],
   "oauth2-configuration": {
     "redirect-uris": [
       "https://*.cfapps.eu10-005.hana.ondemand.com/**"

@@ -166,6 +166,9 @@
 										</VBox>
 
 										<HBox class="cpMsgFooter" alignItems="Center" renderType="Bare" visible="{= ${chat>role} !== 'error' &amp;&amp; !${chat>streaming} }">
+											<customData>
+												<core:CustomData key="rating" value="{= String(${chat>rating}) }" writeToDom="true"/>
+											</customData>
 											<Text text="{path: 'chat>time', formatter: '.formatter.messageTime'}" class="cpMsgTime"/>
 											<Button
 												icon="sap-icon://copy"
@@ -174,6 +177,21 @@
 												tooltip="{i18n>copy}"
 												visible="{= ${chat>role} === 'assistant' &amp;&amp; !!${chat>content} }"
 												press=".onCopy"/>
+											<!-- Feedback: only on answers stored in the history (they have an id) -->
+											<Button
+												icon="sap-icon://thumb-up"
+												type="Transparent"
+												class="cpIconBtn cpThumbUp"
+												tooltip="{= ${chat>rating} === 1 ? ${i18n>feedbackUndo} : ${i18n>feedbackUseful} }"
+												visible="{= ${chat>role} === 'assistant' &amp;&amp; !!${chat>id} }"
+												press=".onFeedbackUseful"/>
+											<Button
+												icon="sap-icon://thumb-down"
+												type="Transparent"
+												class="cpIconBtn cpThumbDown"
+												tooltip="{= ${chat>rating} === -1 ? ${i18n>feedbackUndo} : ${i18n>feedbackNotUseful} }"
+												visible="{= ${chat>role} === 'assistant' &amp;&amp; !!${chat>id} }"
+												press=".onFeedbackNotUseful"/>
 										</HBox>
 									</VBox>
 								</HBox>

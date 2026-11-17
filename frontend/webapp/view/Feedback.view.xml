@@ -1,0 +1,105 @@
+<mvc:View
+	controllerName="com.sapaicopilot.app.controller.Feedback"
+	xmlns:mvc="sap.ui.core.mvc"
+	xmlns:core="sap.ui.core"
+	xmlns="sap.m"
+	height="100%">
+
+	<Page id="feedbackPage" showHeader="false" backgroundDesign="Transparent" class="cpPage">
+		<VBox class="cpContent" renderType="Bare">
+
+			<HBox class="cpPageHeader" alignItems="Center" renderType="Bare">
+				<Button icon="sap-icon://menu2" type="Transparent" class="cpMenuBtn" tooltip="{i18n>openMenu}" press=".onOpenSidebar"/>
+				<VBox class="cpPageHeaderText" renderType="Bare">
+					<Title text="{i18n>feedbackTitle}" level="H1" class="cpPageTitle"/>
+					<Text text="{= ${fb>/data/scope} === 'all' ? ${i18n>feedbackSubtitleAll} : ${i18n>feedbackSubtitleMine} }" class="cpPageSubtitle"/>
+				</VBox>
+				<Button text="{i18n>refresh}" icon="sap-icon://refresh" class="cpGhostBtn" press=".onRefresh" enabled="{= !${fb>/busy} }"/>
+			</HBox>
+
+			<MessageStrip type="Error" showIcon="true" text="{fb>/error}" visible="{= !!${fb>/error} }" class="cpStrip"/>
+
+			<!-- KPIs -->
+			<FlexBox class="cpKpis" wrap="Wrap" renderType="Bare" busy="{fb>/busy}" busyIndicatorDelay="0">
+				<VBox class="cpKpi" renderType="Bare">
+					<core:Icon src="sap-icon://feedback" class="cpKpiIcon"/>
+					<Text text="{i18n>feedbackRated}" class="cpKpiLabel"/>
+					<Text text="{= ${fb>/data} ? String(${fb>/data/stats/total}) : '—' }" class="cpKpiValue"/>
+				</VBox>
+				<VBox class="cpKpi" renderType="Bare">
+					<core:Icon src="sap-icon://thumb-up" class="cpKpiIcon cpKpiIconPositive"/>
+					<Text text="{i18n>feedbackUsefulCount}" class="cpKpiLabel"/>
+					<Text text="{= ${fb>/data} ? String(${fb>/data/stats/positive}) : '—' }" class="cpKpiValue"/>
+				</VBox>
+				<VBox class="cpKpi" renderType="Bare">
+					<core:Icon src="sap-icon://thumb-down" class="cpKpiIcon cpKpiIconNegative"/>
+					<Text text="{i18n>feedbackNotUsefulCount}" class="cpKpiLabel"/>
+					<Text text="{= ${fb>/data} ? String(${fb>/data/stats/negative}) : '—' }" class="cpKpiValue"/>
+				</VBox>
+				<VBox class="cpKpi" renderType="Bare">
+					<core:Icon src="sap-icon://line-chart" class="cpKpiIcon"/>
+					<Text text="{i18n>feedbackSatisfaction}" class="cpKpiLabel"/>
+					<Text text="{= ${fb>/data} &amp;&amp; ${fb>/data/stats/satisfaction} !== null ? ${fb>/data/stats/satisfaction} + ' %' : '—' }" class="cpKpiValue"/>
+				</VBox>
+			</FlexBox>
+
+			<!-- Filter -->
+			<HBox class="cpFeedbackToolbar" alignItems="Center" renderType="Bare">
+				<SegmentedButton selectedKey="{fb>/filter}" selectionChange=".onFilterChange" class="cpFeedbackFilter">
+					<items>
+						<SegmentedButtonItem key="all" text="{i18n>feedbackFilterAll}"/>
+						<SegmentedButtonItem key="-1" icon="sap-icon://thumb-down" text="{i18n>feedbackFilterNegative}"/>
+						<SegmentedButtonItem key="1" icon="sap-icon://thumb-up" text="{i18n>feedbackFilterPositive}"/>
+					</items>
+				</SegmentedButton>
+			</HBox>
+
+			<!-- Feedback -->
+			<List
+				id="feedbackList"
+				class="cpFeedbackList"
+				items="{fb>/data/items}"
+				noDataText="{i18n>feedbackNone}"
+				showSeparators="None"
+				backgroundDesign="Transparent"
+				busy="{fb>/busy}"
+				busyIndicatorDelay="0">
+				<CustomListItem class="cpFeedbackItem">
+					<customData>
+						<core:CustomData key="rating" value="{= String(${fb>rating}) }" writeToDom="true"/>
+					</customData>
+					<VBox class="cpCard cpFeedbackCard" renderType="Bare">
+						<HBox class="cpFeedbackHead" alignItems="Start" renderType="Bare">
+							<core:Icon
+								src="{= ${fb>rating} === 1 ? 'sap-icon://thumb-up' : 'sap-icon://thumb-down' }"
+								class="cpFeedbackRating"
+								tooltip="{= ${fb>rating} === 1 ? ${i18n>feedbackFilterPositive} : ${i18n>feedbackFilterNegative} }"/>
+							<VBox class="cpFeedbackMain" renderType="Bare">
+								<Text text="{fb>question}" class="cpFeedbackQuestion" maxLines="3"/>
+								<Text text="{fb>answer}" class="cpFeedbackAnswer" maxLines="4"/>
+								<Text text="{fb>comment}" class="cpFeedbackComment" visible="{= !!${fb>comment} }"/>
+								<Text text="{parts: ['fb>module', 'fb>tools_used', 'fb>updated_at', 'fb>user'], formatter: '.formatMeta'}" class="cpFeedbackMeta"/>
+							</VBox>
+						</HBox>
+						<HBox class="cpFeedbackActions" renderType="Bare" justifyContent="End">
+							<Button
+								text="{i18n>feedbackOpen}"
+								icon="sap-icon://discussion-2"
+								type="Transparent"
+								class="cpGhostBtn"
+								visible="{fb>own}"
+								press=".onOpenConversation"/>
+							<Button
+								text="{i18n>feedbackCopyCase}"
+								icon="sap-icon://copy"
+								type="Transparent"
+								class="cpGhostBtn"
+								tooltip="{i18n>feedbackCopyCaseTooltip}"
+								press=".onCopyEvalCase"/>
+						</HBox>
+					</VBox>
+				</CustomListItem>
+			</List>
+		</VBox>
+	</Page>
+</mvc:View>
