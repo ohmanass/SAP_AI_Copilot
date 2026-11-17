@@ -8,7 +8,7 @@
     passed to Cloud Foundry through temporary files, never on the command line.
 
     Steps:
-      1. Build   deploy/build/backend    (Python app, pinned requirements, RAG index)
+      1. Build   deploy/build/backend    (Python app, pinned requirements, shipped documents)
                  deploy/build/approuter  (approuter + SAPUI5 build, UI5 from the SAP CDN)
       2. Services: sap-ai-copilot-xsuaa (xsuaa/application),
                    sap-ai-copilot-aicore (user-provided),
@@ -168,27 +168,28 @@ $ApprouterBuild = Join-Path $BuildDir "approuter"
 New-Item -ItemType Directory -Force $BackendBuild, $ApprouterBuild | Out-Null
 
 # --- Backend: application code (no tests, no caches) ---
-robocopy (Join-Path $Root "app") (Join-Path $BackendBuild "app") /E /XD __pycache__ /XF "test_*.py" "cleanup_test_data.py" *.pyc /NFL /NDL /NJH /NJS /NP | Out-Null
+robocopy (Join-Path $Root "app") (Join-Path $BackendBuild "app") /E /XD __pycache__ /XF "test_*.py" *.pyc /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy app failed" }
 
-# --- Backend: RAG documents + index, demo database (never the chat history) ---
+# --- Backend: shipped RAG documents, demo database (never the chat history) ---
+# No vector index: on SAP BTP the knowledge base lives in the SAP HANA Cloud Vector
+# Engine, filled by the backend at startup from data/documents.
 $DataBuild = Join-Path $BackendBuild "data"
 New-Item -ItemType Directory -Force $DataBuild | Out-Null
 robocopy (Join-Path $Root "data\documents") (Join-Path $DataBuild "documents") /E /NFL /NDL /NJH /NJS /NP | Out-Null
-robocopy (Join-Path $Root "data\chroma_db") (Join-Path $DataBuild "chroma_db") /E /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy data failed" }
 if (Test-Path (Join-Path $Root "data\sap.db")) { Copy-Item (Join-Path $Root "data\sap.db") $DataBuild }
-if (-not (Test-Path (Join-Path $DataBuild "chroma_db\chroma.sqlite3"))) {
-    throw "RAG index missing: run 'python -m app.rag.index_documents' first"
-}
 
 # --- Backend: requirements pinned to the versions tested locally ---
 $python = Join-Path $Root ".venv\Scripts\python.exe"
 $frozen = & $python -m pip freeze
+# Local only: tests, and ChromaDB (local vector store; its dependencies, such as
+# onnxruntime, kubernetes and grpc, made every push several minutes longer)
+$LocalOnly = "pytest", "chromadb"
 $pinned = foreach ($requirement in Get-Content (Join-Path $Root "requirements.txt")) {
     $requirement = $requirement.Trim()
     $name = ($requirement -replace '\[.*\]', '').Trim()
-    if (-not $name -or $name -match '^pytest' -or $name.StartsWith('#')) { continue }
+    if (-not $name -or $name.StartsWith('#') -or $LocalOnly -contains $name.ToLower()) { continue }
     $match = $frozen | Where-Object { $_ -match "^$([regex]::Escape($name))==" } | Select-Object -First 1
     if (-not $match) { throw "Version of '$name' not found in .venv" }
     # keep extras: uvicorn[standard] -> uvicorn[standard]==x.y.z

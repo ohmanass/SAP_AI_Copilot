@@ -28,7 +28,7 @@ L'application fonctionne en local et se déploie sur **SAP BTP (Cloud Foundry)**
 
 - Réponses en streaming : l'outil en cours d'exécution s'affiche en direct (« Reading purchase order data », « Searching the knowledge base »), puis le texte apparaît progressivement. Un bouton **Stop** interrompt la génération sans rien enregistrer
 - Chat : envoi avec Entrée, retour à la ligne avec Shift + Entrée, indicateur de génération, rendu Markdown, copie des réponses, gestion des erreurs avec bouton « Réessayer »
-- Sources RAG affichées sous chaque réponse, avec l'extrait réellement récupéré dans ChromaDB et sa distance vectorielle
+- Sources RAG affichées sous chaque réponse, avec l'extrait réellement récupéré dans la base vectorielle et sa distance
 - Outils utilisés par l'agent affichés pour chaque réponse
 - **Tableaux Fiori** sous la réponse pour les données SAP (commandes d'achat, commandes clients, factures fournisseurs et rapprochement à trois) : en-tête du document, postes, montants, dates, statuts colorés, jours de retard, blocages de paiement. Les tableaux sont construits par le backend à partir des résultats des outils, jamais à partir du texte du modèle. Un clic sur une ligne d'une liste ouvre l'analyse du document. Les colonnes secondaires sont masquées quand la place manque
 - **Export Excel** de chaque tableau (bouton dans son en-tête) : toutes les colonnes, y compris celles masquées à l'écran, avec des cellules typées (dates, nombres, montants dans leur devise, quantités et unités) et une feuille *Information* (système SAP, période, totaux, en-tête du document, date d'export). Le fichier `.xlsx` est généré dans le navigateur (`sap.ui.export`) et contient les lignes affichées
@@ -76,7 +76,7 @@ Agent SAP (Tool Calling)
         ├── get_supplier_invoice, search_supplier_invoices, match_purchase_order_invoices
         │                            ── SAP S/4HANA Cloud, API_SUPPLIERINVOICE_PROCESS_SRV,
         │                               API_MATERIAL_DOCUMENT_SRV, API_BUSINESS_PARTNER (OData V2)
-        └── search_sap_documentation ── RAG / ChromaDB
+        └── search_sap_documentation ── RAG : HANA Cloud Vector Engine (BTP) / ChromaDB (local)
 ```
 
 ```text
@@ -91,7 +91,7 @@ SAP_AI_Copilot/
 │   ├── llm/                # Client SAP Generative AI Hub
 │   ├── tools/              # Outils appelés par l'agent
 │   ├── sap_data/           # Sources de données SAP : client OData S/4HANA (achats, ventes, factures), SQLite
-│   ├── rag/                # Découpage, indexation, recherche (ChromaDB)
+│   ├── rag/                # Base de connaissances : découpage, embeddings, recherche (HANA Vector Engine ou ChromaDB)
 │   ├── attachments/        # Documents joints : extraction du texte (PDF, Word, Excel, texte) et lecture par l'agent
 │   ├── database/           # Schéma et jeu de données SQLite
 │   └── storage/            # Historique des conversations et documents joints (SQLite en local, SAP HANA Cloud sur BTP)
@@ -133,7 +133,7 @@ SAP_AI_Copilot/
 | `POST` | `/api/knowledge-base/documents` | Ajoute un document à la base de connaissances (multipart : `file`, `module` vide = tous les espaces) |
 | `POST` | `/api/knowledge-base/documents/from-attachment` | Ajoute un document joint d'une conversation de l'utilisateur (`session_id`, `attachment_id`, `module`) |
 | `DELETE` | `/api/knowledge-base/documents/{name}` | Retire un document ajouté (par son auteur uniquement) |
-| `GET` | `/api/status?check_ai=true` | Statut du backend, de l'IA, de ChromaDB et de SQLite |
+| `GET` | `/api/status?check_ai=true` | Statut du backend, de l'IA, de la base vectorielle, de l'historique et des données SAP |
 
 Exemple :
 
@@ -251,6 +251,7 @@ L'application s'ouvre sur `http://localhost:8080/index.html`. Le serveur de dév
 
 - le **rapprochement à trois** : chaque statut, retours et annulations d'entrées, avoirs, factures annulées, débits ultérieurs, tolérance de prix, solde GR/IR, numéros de poste au format différent selon l'API ;
 - l'**historique** : conversations, messages, documents joints, textes longs et unicode, **isolation entre utilisateurs** (lecture, modification, suppression, envoi de messages et de documents dans la conversation d'un autre), migration des anciens fichiers SQLite et des tables HANA, démarrage sans base disponible. Les mêmes tests tournent sur SAP HANA Cloud quand `HANA_TEST_KEY_FILE` désigne la clé d'un service `hana` (`cf service-key …`) ;
+- le **déploiement** : le backend démarre sans ChromaDB (comme sur BTP) et utilise le HANA Vector Engine ;
 - l'**identité** : utilisateur tiré du jeton validé uniquement (un en-tête envoyé par le navigateur est ignoré), refus sans jeton ;
 - la **base de connaissances** : synchronisation des documents livrés (nouveau, inchangé, modifié, supprimé), recherche limitée aux documents d'un espace, ajout, doublons, suppression par l'auteur seulement, échec d'embedding sans trace, ajout depuis un document joint et API. Les mêmes tests tournent sur le SAP HANA Cloud Vector Engine avec `HANA_TEST_KEY_FILE` ;
 - les **documents joints** : extraction PDF / Word / Excel / texte, fichiers refusés (type, taille, archive piégée), lecture par parties, cloisonnement entre conversations, API d'envoi et de suppression ;
@@ -289,7 +290,7 @@ sap-ai-copilot-backend     (Python, FastAPI)
 - Un sous-compte SAP BTP avec l'environnement Cloud Foundry, un space et le rôle **Space Developer**
 - Les services **xsuaa** (plan `application`) et **destination** (plan `lite`) disponibles dans le sous-compte
 - La CLI Cloud Foundry v8 (`winget install CloudFoundry.CLI.v8`)
-- Un `.env` complet (identifiants AI Core et clé S/4HANA) et l'index RAG construit (`python -m app.rag.index_documents`)
+- Un `.env` complet (identifiants AI Core et clé S/4HANA). Aucun index RAG à construire : le backend indexe la documentation dans SAP HANA Cloud à son démarrage
 
 ### Déployer
 
@@ -300,7 +301,7 @@ cf login -a https://api.cf.<région>.hana.ondemand.com --sso
 
 Le script :
 
-1. construit le dossier `deploy/build` (non versionné) : code du backend sans les tests, index RAG, dépendances Python figées sur les versions testées en local, build SAPUI5 ;
+1. construit le dossier `deploy/build` (non versionné) : code du backend sans les tests, documentation livrée, dépendances Python figées sur les versions testées en local (sans ChromaDB ni pytest, inutiles sur BTP : le déploiement est bien plus rapide), build SAPUI5 ;
 2. crée ou met à jour les trois services, dont la destination S/4HANA. Les secrets sont lus dans `.env` et transmis à Cloud Foundry par des fichiers temporaires, jamais en ligne de commande ;
 3. déploie le backend puis l'Application Router ;
 4. vérifie la sécurité : le backend doit répondre **401** à un appel sans jeton, sinon le script échoue ;
