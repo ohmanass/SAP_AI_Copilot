@@ -73,14 +73,14 @@ def note(summaries) -> str:
     return "\n\n[Attached documents: " + "; ".join(entries) + "]"
 
 
-def read(session_id, document_id=None, part=1):
-    """Tool implementation, bound to the conversation of the agent."""
+def read(session_id, owner, document_id=None, part=1):
+    """Tool implementation, bound to the conversation (and user) of the agent."""
 
-    if not session_id:
+    if not session_id or not owner:
         return {"error": "No conversation: no document can be attached."}
 
     if document_id is None:
-        documents = chat_store.list_attachments(session_id)
+        documents = chat_store.list_attachments(session_id, owner)
         if not documents:
             return {"documents": [], "message": "No document is attached to this conversation."}
         return {"documents": [
@@ -95,7 +95,7 @@ def read(session_id, document_id=None, part=1):
     except (TypeError, ValueError):
         return {"error": "document_id and part must be integers."}
 
-    found = chat_store.get_attachment_text(session_id, document_id)
+    found = chat_store.get_attachment_text(session_id, owner, document_id)
     if not found:
         return {"error": f"Document #{document_id} is not attached to this conversation."}
 

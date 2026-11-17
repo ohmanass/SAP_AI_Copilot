@@ -7,6 +7,11 @@ with SAP's official library (sap-xssec): signature, expiry and audience.
 
 Active only when an XSUAA service is bound to the app (VCAP_SERVICES);
 locally there is no binding and every request goes through unchanged.
+
+The identity of the signed-in user is taken from the validated token only
+(never from a header the browser could set) and made available to the API as
+request.state.user: "<identity provider origin>/<logon name>". Locally it is
+always LOCAL_USER.
 """
 
 import json
@@ -19,6 +24,23 @@ logger = logging.getLogger("sap_ai_copilot.auth")
 
 # Cloud Foundry health checks call this endpoint without a token
 PUBLIC_PATHS = {"/api/health"}
+
+# Owner of the history when the app runs without SAP login (local development)
+LOCAL_USER = "local"
+
+
+def current_user(request) -> str:
+    """Identity of the caller (FastAPI dependency)."""
+    return getattr(request.state, "user", None) or LOCAL_USER
+
+
+def user_identity(context) -> str:
+    """Stable identity from a validated XSUAA security context."""
+    logon_name = context.get_logon_name()
+    if logon_name:
+        return f"{context.get_origin() or 'unknown'}/{logon_name}"
+    # Technical token without a user (client credentials): one identity per client
+    return f"client/{context.get_clientid()}"
 
 
 def xsuaa_credentials():
@@ -54,18 +76,20 @@ class XsuaaAuthMiddleware:
 
         try:
             # May fetch the XSUAA signing keys (cached): run outside the event loop
-            await to_thread.run_sync(self._validate, token)
+            user = await to_thread.run_sync(self._validate, token)
         except Exception as error:
             logger.warning("Rejected token: %s", type(error).__name__)
             await self._reject(send, "Invalid or expired token.")
             return
 
+        # Read by FastAPI as request.state.user
+        scope.setdefault("state", {})["user"] = user
         await self.app(scope, receive, send)
 
     def _validate(self, token):
         from sap import xssec
 
-        xssec.create_security_context(token, self.credentials)
+        return user_identity(xssec.create_security_context(token, self.credentials))
 
     @staticmethod
     def _bearer_token(scope):

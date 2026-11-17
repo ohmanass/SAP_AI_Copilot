@@ -11,6 +11,7 @@ from app.attachments.extract import ExtractionError, extract_text
 from app.storage import chat_store, database
 
 SESSION = "test-session-0001"
+OWNER = "local"
 
 
 # ---------------------------------------------------------------------------
@@ -164,32 +165,35 @@ def test_note_lists_documents():
 
 def test_documents_are_read_part_by_part(chat_db, monkeypatch):
     monkeypatch.setattr(reader, "PART_CHARS", 10)
-    doc = chat_db.add_attachment(SESSION, "long.txt", 25, None, "A" * 10 + "B" * 10 + "C" * 5, False)
+    doc = chat_db.add_attachment(SESSION, OWNER, "long.txt", 25, None, "A" * 10 + "B" * 10 + "C" * 5, False)
 
-    first = reader.read(SESSION, doc["id"])
+    first = reader.read(SESSION, OWNER, doc["id"])
     assert (first["part"], first["parts"], first["text"]) == (1, 3, "A" * 10)
     assert "part=2" in first["next"]
-    last = reader.read(SESSION, doc["id"], 3)
+    last = reader.read(SESSION, OWNER, doc["id"], 3)
     assert last["text"] == "C" * 5 and "next" not in last
-    assert "does not exist" in reader.read(SESSION, doc["id"], 4)["error"]
+    assert "does not exist" in reader.read(SESSION, OWNER, doc["id"], 4)["error"]
 
 
 def test_documents_of_another_conversation_are_not_readable(chat_db):
-    doc = chat_db.add_attachment(SESSION, "secret.txt", 6, None, "secret", False)
-    assert "not attached" in reader.read("other-session-0001", doc["id"])["error"]
-    assert reader.read("other-session-0001")["documents"] == []
-    assert reader.read(SESSION)["documents"][0]["name"] == "secret.txt"
+    doc = chat_db.add_attachment(SESSION, OWNER, "secret.txt", 6, None, "secret", False)
+    assert "not attached" in reader.read("other-session-0001", OWNER, doc["id"])["error"]
+    assert reader.read("other-session-0001", OWNER)["documents"] == []
+    assert reader.read(SESSION, OWNER)["documents"][0]["name"] == "secret.txt"
+    # Same conversation id, another user: nothing
+    assert "not attached" in reader.read(SESSION, "sap.default/bob@example.com", doc["id"])["error"]
+    assert reader.read(SESSION, "sap.default/bob@example.com")["documents"] == []
 
 
 def test_attachments_are_saved_with_the_message_and_deleted_with_the_conversation(chat_db):
-    doc = chat_db.add_attachment(SESSION, "invoice.pdf", 100, 1, "Invoice", False)
-    chat_db.save_exchange(SESSION, "Check this invoice", "Done", [], [], attachments=[doc])
-    messages = chat_db.get_conversation(SESSION)["messages"]
+    doc = chat_db.add_attachment(SESSION, OWNER, "invoice.pdf", 100, 1, "Invoice", False)
+    chat_db.save_exchange(SESSION, OWNER, "Check this invoice", "Done", [], [], attachments=[doc])
+    messages = chat_db.get_conversation(SESSION, OWNER)["messages"]
     assert messages[0]["attachments"][0]["name"] == "invoice.pdf"
     assert messages[1]["attachments"] == []
 
-    chat_db.delete_conversation(SESSION)
-    assert chat_db.list_attachments(SESSION) == []
+    chat_db.delete_conversation(SESSION, OWNER)
+    assert chat_db.list_attachments(SESSION, OWNER) == []
 
 
 # ---------------------------------------------------------------------------
@@ -220,6 +224,37 @@ def test_file_names_are_cleaned():
     assert _clean_filename("../../etc/passwd") == "passwd"
     assert _clean_filename("") == "document"
     assert len(_clean_filename("a" * 500 + ".txt")) == 200
+
+
+def test_api_isolates_users(client):
+    from app import api
+
+    alice, bob = "sap.default/alice@example.com", "sap.default/bob@example.com"
+    session = "isolation-session-0001"
+    api.app.dependency_overrides[api.current_user] = lambda: alice
+    try:
+        upload = client.post(f"/api/sessions/{session}/attachments", files={"file": ("a.txt", b"Alice", "text/plain")})
+        assert upload.status_code == 200
+        chat_store.save_exchange(session, alice, "Alice's question", "Answer", [], [])
+        assert [c["session_id"] for c in client.get("/api/sessions").json()["sessions"]] == [session]
+
+        api.app.dependency_overrides[api.current_user] = lambda: bob
+        assert client.get("/api/sessions").json()["sessions"] == []
+        assert client.get(f"/api/sessions/{session}").status_code == 404
+        assert client.patch(f"/api/sessions/{session}", json={"title": "Mine"}).status_code == 404
+        assert client.delete(f"/api/sessions/{session}").status_code == 404
+        assert client.get(f"/api/sessions/{session}/attachments").json()["attachments"] == []
+        assert client.delete(f"/api/sessions/{session}/attachments/{upload.json()['id']}").status_code == 404
+        assert client.post(f"/api/sessions/{session}/attachments",
+                           files={"file": ("b.txt", b"Bob", "text/plain")}).status_code == 404
+        # Chatting in Alice's conversation is refused before the AI is called
+        assert client.post("/api/chat", json={"message": "Hi", "session_id": session}).status_code == 404
+        assert client.post("/api/chat/stream", json={"message": "Hi", "session_id": session}).status_code == 404
+
+        api.app.dependency_overrides[api.current_user] = lambda: alice
+        assert client.get(f"/api/sessions/{session}").json()["title"] == "Alice's question"
+    finally:
+        api.app.dependency_overrides.clear()
 
 
 def test_upload_errors(client):

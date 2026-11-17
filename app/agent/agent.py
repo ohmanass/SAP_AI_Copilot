@@ -327,12 +327,13 @@ MAX_ROUNDS_MESSAGE = "Maximum number of tool-calling rounds reached."
 
 class SAPAgent:
 
-    def __init__(self, module=None, session_id=None):
+    def __init__(self, module=None, session_id=None, owner=None):
 
         self.llm = LLMClient()
 
-        # Conversation the agent belongs to: scopes the attached documents it can read
+        # Conversation and user the agent belongs to: scope the attached documents it can read
         self.session_id = session_id
+        self.owner = owner
 
         # Optional module workspace (app.modules.Module): restricts tools and documents.
         # Attached documents can be read in every workspace.
@@ -454,7 +455,7 @@ class SAPAgent:
         # Attached documents: always bound to this agent's conversation, never another one
         if tool_name == attachment_reader.TOOL["function"]["name"]:
             return attachment_reader.read(
-                self.session_id, arguments.get("document_id"), arguments.get("part", 1)
+                self.session_id, self.owner, arguments.get("document_id"), arguments.get("part", 1)
             )
 
         if tool_name not in TOOL_REGISTRY:

@@ -8,7 +8,7 @@ import re
 import threading
 from uuid import uuid4
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -53,6 +53,14 @@ def history_unavailable(request, error):
     return JSONResponse(status_code=503, content={"detail": f"Chat history temporarily unavailable. {error}"})
 
 
+def current_user(request: Request) -> str:
+    """Signed-in user (validated XSUAA token on SAP BTP, "local" otherwise)."""
+    return auth.current_user(request)
+
+
+NOT_FOUND = "Conversation not found."
+
+
 def save_exchange_safely(**exchange):
     """The answer is shown even if the history cannot be saved."""
     try:
@@ -94,22 +102,38 @@ class ChatResponse(BaseModel):
     tables: list[dict] = []
 
 
-def get_session(session_id: str, requested_module: str | None = None):
+def check_session_owner(session_id: str, owner: str):
+    """404 when the conversation id belongs to another user (same answer as an unknown id)."""
+    with registry_lock:
+        agent = agents.get(session_id)
+    if agent is not None and agent.owner != owner:
+        raise HTTPException(status_code=404, detail=NOT_FOUND)
+    try:
+        if not chat_store.session_available(session_id, owner):
+            raise HTTPException(status_code=404, detail=NOT_FOUND)
+    except chat_store.StoreUnavailable:
+        # Cannot check the history: only an agent created by this user (checked above) or a new one
+        pass
+
+
+def get_session(session_id: str, owner: str, requested_module: str | None = None):
     """
-    Return (agent, lock) for a session, restoring its history if persisted.
+    Return (agent, lock) for a session of this user, restoring its history if persisted.
     A conversation keeps the module it was created with.
     """
+
+    check_session_owner(session_id, owner)
 
     with registry_lock:
         if session_id not in agents:
             try:
-                conversation = chat_store.get_conversation(session_id)
+                conversation = chat_store.get_conversation(session_id, owner)
             except chat_store.StoreUnavailable as error:
                 # Answer without the previous messages rather than not at all
                 logger.warning("History of %s not restored: %s", session_id, error)
                 conversation = None
             module_key = conversation["module"] if conversation else requested_module
-            agent = SAPAgent(module=get_module(module_key), session_id=session_id)
+            agent = SAPAgent(module=get_module(module_key), session_id=session_id, owner=owner)
 
             if conversation:
                 agent.restore_history(conversation["messages"])
@@ -117,6 +141,8 @@ def get_session(session_id: str, requested_module: str | None = None):
             agents[session_id] = agent
             session_locks[session_id] = threading.Lock()
 
+        if agents[session_id].owner != owner:
+            raise HTTPException(status_code=404, detail=NOT_FOUND)
         return agents[session_id], session_locks[session_id]
 
 
@@ -124,12 +150,12 @@ def module_key(agent):
     return agent.module.key if agent.module else None
 
 
-def message_attachments(session_id, request):
-    """Summaries of the documents sent with a message (only this conversation's documents)."""
+def message_attachments(session_id, owner, request):
+    """Summaries of the documents sent with a message (only this user's documents of this conversation)."""
     if not request.attachments:
         return []
     try:
-        return chat_store.list_attachments(session_id, request.attachments)
+        return chat_store.list_attachments(session_id, owner, request.attachments)
     except chat_store.StoreUnavailable as error:
         logger.warning("Attached documents unavailable: %s", error)
         return []
@@ -144,19 +170,20 @@ def health():
 
 
 @app.post("/api/chat", response_model=ChatResponse)
-def chat(request: ChatRequest):
+def chat(request: ChatRequest, user: str = Depends(current_user)):
 
     session_id = request.session_id or str(uuid4())
+    agent, lock = get_session(session_id, user, request.module)
 
     try:
-        agent, lock = get_session(session_id, request.module)
-        attachments = message_attachments(session_id, request)
+        attachments = message_attachments(session_id, user, request)
 
         with lock:
             result = agent.ask_with_details(request.message + attachment_reader.note(attachments))
 
         save_exchange_safely(
             session_id=session_id,
+            owner=user,
             user_message=request.message,
             assistant_message=result["response"],
             sources=result["sources"],
@@ -184,7 +211,7 @@ def chat(request: ChatRequest):
 
 
 @app.post("/api/chat/stream")
-def chat_stream(request: ChatRequest):
+def chat_stream(request: ChatRequest, user: str = Depends(current_user)):
     """
     Streaming variant of /api/chat. Response: NDJSON, one event per line:
       session      {"type", "session_id"}
@@ -196,8 +223,8 @@ def chat_stream(request: ChatRequest):
     """
 
     session_id = request.session_id or str(uuid4())
-    agent, lock = get_session(session_id, request.module)
-    attachments = message_attachments(session_id, request)
+    agent, lock = get_session(session_id, user, request.module)
+    attachments = message_attachments(session_id, user, request)
 
     def event_line(event):
         return json.dumps(event, ensure_ascii=False) + "\n"
@@ -215,6 +242,7 @@ def chat_stream(request: ChatRequest):
 
                     save_exchange_safely(
                         session_id=session_id,
+                        owner=user,
                         user_message=request.message,
                         assistant_message=event["response"],
                         sources=event["sources"],
@@ -245,17 +273,17 @@ def list_modules():
 
 
 @app.get("/api/sessions")
-def list_sessions():
-    return {"sessions": chat_store.list_conversations()}
+def list_sessions(user: str = Depends(current_user)):
+    return {"sessions": chat_store.list_conversations(user)}
 
 
 @app.get("/api/sessions/{session_id}")
-def get_session_history(session_id: str):
+def get_session_history(session_id: str, user: str = Depends(current_user)):
 
-    conversation = chat_store.get_conversation(session_id)
+    conversation = chat_store.get_conversation(session_id, user)
 
     if conversation is None:
-        raise HTTPException(status_code=404, detail="Conversation not found.")
+        raise HTTPException(status_code=404, detail=NOT_FOUND)
 
     return conversation
 
@@ -265,23 +293,23 @@ class RenameRequest(BaseModel):
 
 
 @app.patch("/api/sessions/{session_id}")
-def rename_session(session_id: str, request: RenameRequest):
+def rename_session(session_id: str, request: RenameRequest, user: str = Depends(current_user)):
 
     if not request.title.strip():
         raise HTTPException(status_code=422, detail="The title cannot be empty.")
 
-    if not chat_store.rename_conversation(session_id, request.title):
-        raise HTTPException(status_code=404, detail="Conversation not found.")
+    if not chat_store.rename_conversation(session_id, user, request.title):
+        raise HTTPException(status_code=404, detail=NOT_FOUND)
 
-    conversation = chat_store.get_conversation(session_id)
+    conversation = chat_store.get_conversation(session_id, user)
     return {"session_id": session_id, "title": conversation["title"]}
 
 
 @app.delete("/api/sessions/{session_id}")
-def delete_session(session_id: str):
+def delete_session(session_id: str, user: str = Depends(current_user)):
 
-    if not chat_store.delete_conversation(session_id):
-        raise HTTPException(status_code=404, detail="Conversation not found.")
+    if not chat_store.delete_conversation(session_id, user):
+        raise HTTPException(status_code=404, detail=NOT_FOUND)
 
     with registry_lock:
         agents.pop(session_id, None)
@@ -296,8 +324,8 @@ def knowledge_base():
 
 
 @app.get("/api/status")
-def status(check_ai: bool = False):
-    return system_info.get_system_status(check_ai=check_ai)
+def status(check_ai: bool = False, user: str = Depends(current_user)):
+    return system_info.get_system_status(check_ai=check_ai, owner=user)
 
 
 # ----------------------------------------------------------------------
@@ -321,15 +349,16 @@ def _clean_filename(name: str) -> str:
 
 
 @app.post("/api/sessions/{session_id}/attachments")
-def upload_attachment(session_id: str, file: UploadFile = File(...)):
+def upload_attachment(session_id: str, file: UploadFile = File(...), user: str = Depends(current_user)):
     """
     Attach a document to a conversation (which may not exist yet: the first
     message creates it). Only the extracted text is stored, never the file.
     """
 
     _check_session_id(session_id)
+    check_session_owner(session_id, user)
 
-    if len(chat_store.list_attachments(session_id)) >= MAX_ATTACHMENTS_PER_CONVERSATION:
+    if len(chat_store.list_attachments(session_id, user)) >= MAX_ATTACHMENTS_PER_CONVERSATION:
         raise HTTPException(
             status_code=409,
             detail=f"A conversation can hold at most {MAX_ATTACHMENTS_PER_CONVERSATION} documents."
@@ -344,18 +373,18 @@ def upload_attachment(session_id: str, file: UploadFile = File(...)):
     except attachment_extract.ExtractionError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
-    return chat_store.add_attachment(session_id, name, len(data), pages, text, truncated)
+    return chat_store.add_attachment(session_id, user, name, len(data), pages, text, truncated)
 
 
 @app.get("/api/sessions/{session_id}/attachments")
-def list_session_attachments(session_id: str):
+def list_session_attachments(session_id: str, user: str = Depends(current_user)):
     _check_session_id(session_id)
-    return {"attachments": chat_store.list_attachments(session_id)}
+    return {"attachments": chat_store.list_attachments(session_id, user)}
 
 
 @app.delete("/api/sessions/{session_id}/attachments/{attachment_id}")
-def delete_session_attachment(session_id: str, attachment_id: int):
+def delete_session_attachment(session_id: str, attachment_id: int, user: str = Depends(current_user)):
     _check_session_id(session_id)
-    if not chat_store.delete_attachment(session_id, attachment_id):
+    if not chat_store.delete_attachment(session_id, user, attachment_id):
         raise HTTPException(status_code=404, detail="Document not found.")
     return {"deleted": attachment_id}

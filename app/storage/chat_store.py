@@ -5,6 +5,10 @@ attached documents.
 Stored in SAP HANA Cloud on SAP BTP (bound "hana" schema service) and in a
 local SQLite file otherwise (data/chat_history.db), kept separate from the SAP
 business data. See app.storage.database. The SQL below runs on both engines.
+
+Every conversation and attached document belongs to one user ("owner": the SAP
+login on BTP, "local" locally). Every function filters on it: a conversation of
+another user behaves exactly like a conversation that does not exist.
 """
 
 import json
@@ -51,12 +55,12 @@ def _database():
     return database
 
 
-def describe():
-    """Engine of the history, for the status page."""
+def describe(owner: str):
+    """Engine of the history and the user's conversation count, for the status page."""
     info = get_database().describe()
     try:
         with _database().cursor() as cursor:
-            cursor.execute("SELECT COUNT(*) AS conversations FROM conversations")
+            cursor.execute("SELECT COUNT(*) AS conversations FROM conversations WHERE owner = ?", (owner,))
             info["conversations"] = cursor.fetchone()["conversations"]
         info.update(available=True, error=None)
     except Exception as error:  # status page: never fails
@@ -73,18 +77,23 @@ def build_title(message: str) -> str:
     return title or "New conversation"
 
 
-def conversation_exists(session_id: str) -> bool:
+def session_available(session_id: str, owner: str) -> bool:
+    """
+    True when this user may use this conversation id: it is theirs, or it does not
+    exist yet (new chat). False when it belongs to someone else.
+    """
     with _database().cursor() as cursor:
         row = cursor.execute(
-            "SELECT 1 AS found FROM conversations WHERE session_id = ?",
+            "SELECT owner FROM conversations WHERE session_id = ?",
             (session_id,)
         ).fetchone()
 
-    return row is not None
+    return row is None or row["owner"] == owner
 
 
 def save_exchange(
     session_id: str,
+    owner: str,
     user_message: str,
     assistant_message: str,
     sources: list,
@@ -100,16 +109,17 @@ def save_exchange(
     with _database().cursor() as cursor:
         # Update first, insert when the conversation is new (no engine-specific upsert)
         cursor.execute(
-            "UPDATE conversations SET updated_at = ? WHERE session_id = ?",
-            (now, session_id)
+            "UPDATE conversations SET updated_at = ? WHERE session_id = ? AND owner = ?",
+            (now, session_id, owner)
         )
         if cursor.rowcount == 0:
+            # Fails on the primary key if the id belongs to another user: nothing is written
             cursor.execute(
                 """
-                INSERT INTO conversations (session_id, title, created_at, updated_at, module)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO conversations (session_id, title, created_at, updated_at, module, owner)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (session_id, build_title(user_message), now, now, module)
+                (session_id, build_title(user_message), now, now, module, owner)
             )
 
         cursor.executemany(
@@ -135,7 +145,7 @@ def save_exchange(
         )
 
 
-def list_conversations():
+def list_conversations(owner: str):
     with _database().cursor() as cursor:
         rows = cursor.execute(
             """
@@ -147,22 +157,24 @@ def list_conversations():
                 c.module,
                 (SELECT COUNT(*) FROM messages m WHERE m.session_id = c.session_id) AS message_count
             FROM conversations c
+            WHERE c.owner = ?
             ORDER BY c.updated_at DESC
-            """
+            """,
+            (owner,)
         ).fetchall()
 
     return rows
 
 
-def get_conversation(session_id: str):
+def get_conversation(session_id: str, owner: str):
     with _database().cursor() as cursor:
         conversation = cursor.execute(
             """
             SELECT session_id, title, created_at, updated_at, module
             FROM conversations
-            WHERE session_id = ?
+            WHERE session_id = ? AND owner = ?
             """,
-            (session_id,)
+            (session_id, owner)
         ).fetchone()
 
         if conversation is None:
@@ -195,23 +207,25 @@ def get_conversation(session_id: str):
     return result
 
 
-def rename_conversation(session_id: str, title: str) -> bool:
+def rename_conversation(session_id: str, owner: str, title: str) -> bool:
     """Change a conversation title (normalised like generated titles)."""
 
     with _database().cursor() as cursor:
         cursor.execute(
-            "UPDATE conversations SET title = ? WHERE session_id = ?",
-            (build_title(title), session_id)
+            "UPDATE conversations SET title = ? WHERE session_id = ? AND owner = ?",
+            (build_title(title), session_id, owner)
         )
         return cursor.rowcount > 0
 
 
-def delete_conversation(session_id: str) -> bool:
+def delete_conversation(session_id: str, owner: str) -> bool:
     with _database().cursor() as cursor:
+        cursor.execute("DELETE FROM conversations WHERE session_id = ? AND owner = ?", (session_id, owner))
+        if cursor.rowcount == 0:
+            return False
         cursor.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
-        cursor.execute("DELETE FROM attachments WHERE session_id = ?", (session_id,))
-        cursor.execute("DELETE FROM conversations WHERE session_id = ?", (session_id,))
-        return cursor.rowcount > 0
+        cursor.execute("DELETE FROM attachments WHERE session_id = ? AND owner = ?", (session_id, owner))
+        return True
 
 
 # ----------------------------------------------------------------------
@@ -233,14 +247,14 @@ def _attachment_summary(row):
     }
 
 
-def add_attachment(session_id: str, name: str, size_bytes: int, pages, text: str, truncated: bool):
+def add_attachment(session_id: str, owner: str, name: str, size_bytes: int, pages, text: str, truncated: bool):
     with _database().cursor() as cursor:
         cursor.execute(
             """
-            INSERT INTO attachments (session_id, name, size_bytes, pages, chars, text, truncated, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO attachments (session_id, owner, name, size_bytes, pages, chars, text, truncated, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (session_id, name, size_bytes, pages, len(text), text, int(truncated), _now())
+            (session_id, owner, name, size_bytes, pages, len(text), text, int(truncated), _now())
         )
         attachment_id = cursor.last_id()
         row = cursor.execute(
@@ -251,13 +265,13 @@ def add_attachment(session_id: str, name: str, size_bytes: int, pages, text: str
     return _attachment_summary(row)
 
 
-def list_attachments(session_id: str, ids=None):
+def list_attachments(session_id: str, owner: str, ids=None):
     """Summaries of the documents of a conversation (optionally only these ids)."""
 
     with _database().cursor() as cursor:
         rows = cursor.execute(
-            f"SELECT {SUMMARY_COLUMNS} FROM attachments WHERE session_id = ? ORDER BY attachment_id",
-            (session_id,)
+            f"SELECT {SUMMARY_COLUMNS} FROM attachments WHERE session_id = ? AND owner = ? ORDER BY attachment_id",
+            (session_id, owner)
         ).fetchall()
 
     summaries = [_attachment_summary(row) for row in rows]
@@ -267,22 +281,23 @@ def list_attachments(session_id: str, ids=None):
     return summaries
 
 
-def get_attachment_text(session_id: str, attachment_id: int):
+def get_attachment_text(session_id: str, owner: str, attachment_id: int):
     """(summary, text) of a document of this conversation, or None."""
 
     with _database().cursor() as cursor:
         row = cursor.execute(
-            f"SELECT {SUMMARY_COLUMNS}, text FROM attachments WHERE session_id = ? AND attachment_id = ?",
-            (session_id, attachment_id)
+            f"SELECT {SUMMARY_COLUMNS}, text FROM attachments"
+            " WHERE session_id = ? AND owner = ? AND attachment_id = ?",
+            (session_id, owner, attachment_id)
         ).fetchone()
 
     return (_attachment_summary(row), row["text"]) if row else None
 
 
-def delete_attachment(session_id: str, attachment_id: int) -> bool:
+def delete_attachment(session_id: str, owner: str, attachment_id: int) -> bool:
     with _database().cursor() as cursor:
         cursor.execute(
-            "DELETE FROM attachments WHERE session_id = ? AND attachment_id = ?",
-            (session_id, attachment_id)
+            "DELETE FROM attachments WHERE session_id = ? AND owner = ? AND attachment_id = ?",
+            (session_id, owner, attachment_id)
         )
         return cursor.rowcount > 0

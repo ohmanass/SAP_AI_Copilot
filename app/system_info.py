@@ -234,7 +234,7 @@ def _sap_database_status():
         connection.close()
 
 
-def get_system_status(check_ai: bool = False):
+def get_system_status(check_ai: bool = False, owner: str = "local"):
 
     configured = all(os.getenv(name) for name in REQUIRED_AI_CORE_VARIABLES)
 
@@ -259,5 +259,5 @@ def get_system_status(check_ai: bool = False):
         "vector_store": _vector_store_status(),
         "sap_data": get_data_source().status(),
         "sap_database": _sap_database_status(),
-        "chat_history": chat_store.describe()
+        "chat_history": chat_store.describe(owner)
     }

@@ -246,7 +246,8 @@ L'application s'ouvre sur `http://localhost:8080/index.html`. Le serveur de dév
 `python -m pytest` lance les tests du backend. Ils simulent toutes les réponses externes (S/4HANA, Destination service) : ils tournent hors ligne, sans clé ni identifiants, en moins d'une seconde. Ils couvrent :
 
 - le **rapprochement à trois** : chaque statut, retours et annulations d'entrées, avoirs, factures annulées, débits ultérieurs, tolérance de prix, solde GR/IR, numéros de poste au format différent selon l'API ;
-- l'**historique** : conversations, messages, documents joints, textes longs et unicode, migration des anciens fichiers SQLite, démarrage sans base disponible. Les mêmes tests tournent sur SAP HANA Cloud quand `HANA_TEST_KEY_FILE` désigne la clé d'un service `hana` (`cf service-key …`) ;
+- l'**historique** : conversations, messages, documents joints, textes longs et unicode, **isolation entre utilisateurs** (lecture, modification, suppression, envoi de messages et de documents dans la conversation d'un autre), migration des anciens fichiers SQLite et des tables HANA, démarrage sans base disponible. Les mêmes tests tournent sur SAP HANA Cloud quand `HANA_TEST_KEY_FILE` désigne la clé d'un service `hana` (`cf service-key …`) ;
+- l'**identité** : utilisateur tiré du jeton validé uniquement (un en-tête envoyé par le navigateur est ignoré), refus sans jeton ;
 - les **documents joints** : extraction PDF / Word / Excel / texte, fichiers refusés (type, taille, archive piégée), lecture par parties, cloisonnement entre conversations, API d'envoi et de suppression ;
 - les **tableaux de données** : colonnes sans valeur retirées, limite de lignes, unités de total, actions sur les lignes, dédoublonnage ;
 - la **connexion SAP** : mode direct, lecture de la destination (en-têtes d'authentification, `URL.headers.*`, `URL.queries.*`, cache et expiration des jetons, erreurs) et construction des requêtes OData.
@@ -339,6 +340,7 @@ Supprime les deux applications (avec leurs routes) et les services `sap-ai-copil
 
 - Les identifiants SAP AI Core et la clé API S/4HANA restent côté serveur : dans `.env` en local (exclu du dépôt). Sur BTP, ils sont dans un service Cloud Foundry pour AI Core et dans une destination BTP pour S/4HANA.
 - Sur BTP, toute l'application exige une connexion SAP (XSUAA) et l'API vérifie le jeton de chaque appel.
+- **Historique par utilisateur** : chaque conversation et chaque document joint appartient à l'utilisateur connecté, identifié par le jeton XSUAA validé (fournisseur d'identité + nom de connexion), jamais par une information envoyée par le navigateur. Un utilisateur ne voit, ne reprend, ne renomme et ne supprime que ses conversations ; l'agent ne lit que ses documents. Une conversation d'un autre utilisateur répond comme une conversation inexistante (404). En local, sans connexion SAP, l'historique appartient à l'utilisateur `local`.
 - Les requêtes qui modifient des données (`POST`, `DELETE`) sont protégées par un jeton CSRF via l'Application Router.
 - L'accès à S/4HANA est en lecture seule (requêtes GET uniquement).
 - Le navigateur ne reçoit que des noms de modèles, des compteurs et des indicateurs de statut.

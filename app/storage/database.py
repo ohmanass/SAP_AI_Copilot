@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     title TEXT NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    module TEXT
+    module TEXT,
+    owner TEXT
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -67,6 +68,9 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_messages_session
     ON messages(session_id, message_id);
 
+CREATE INDEX IF NOT EXISTS idx_conversations_owner
+    ON conversations(owner, updated_at);
+
 -- Documents attached to a conversation. No foreign key: a document can be
 -- uploaded before the first message creates the conversation.
 CREATE TABLE IF NOT EXISTS attachments (
@@ -78,7 +82,8 @@ CREATE TABLE IF NOT EXISTS attachments (
     chars INTEGER,
     text TEXT NOT NULL,
     truncated INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    owner TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_attachments_session
@@ -91,7 +96,12 @@ SQLITE_MIGRATIONS = (
     ("messages", "tables", "TEXT NOT NULL DEFAULT '[]'"),
     ("messages", "attachments", "TEXT NOT NULL DEFAULT '[]'"),
     ("attachments", "chars", "INTEGER"),
+    ("conversations", "owner", "TEXT"),
+    ("attachments", "owner", "TEXT"),
 )
+
+# Local user of the SQLite history (no SAP login locally): see app.auth.LOCAL_USER
+SQLITE_DEFAULT_OWNER = "local"
 
 HANA_TABLES = {
     "CONVERSATIONS": """
@@ -100,7 +110,8 @@ HANA_TABLES = {
             title NVARCHAR(200) NOT NULL,
             created_at NVARCHAR(40) NOT NULL,
             updated_at NVARCHAR(40) NOT NULL,
-            module NVARCHAR(20)
+            module NVARCHAR(20),
+            owner NVARCHAR(256)
         )""",
     "MESSAGES": """
         CREATE COLUMN TABLE messages (
@@ -124,14 +135,22 @@ HANA_TABLES = {
             chars INTEGER,
             text NCLOB NOT NULL,
             truncated TINYINT NOT NULL,
-            created_at NVARCHAR(40) NOT NULL
+            created_at NVARCHAR(40) NOT NULL,
+            owner NVARCHAR(256)
         )""",
 }
 
 HANA_INDEXES = {
     "IDX_MESSAGES_SESSION": "CREATE INDEX idx_messages_session ON messages(session_id, message_id)",
     "IDX_ATTACHMENTS_SESSION": "CREATE INDEX idx_attachments_session ON attachments(session_id, attachment_id)",
+    "IDX_CONVERSATIONS_OWNER": "CREATE INDEX idx_conversations_owner ON conversations(owner, updated_at)",
 }
+
+# Columns added after the first HANA tables: (table, column, definition)
+HANA_MIGRATIONS = (
+    ("CONVERSATIONS", "OWNER", "ALTER TABLE conversations ADD (owner NVARCHAR(256))"),
+    ("ATTACHMENTS", "OWNER", "ALTER TABLE attachments ADD (owner NVARCHAR(256))"),
+)
 
 
 # ----------------------------------------------------------------------
@@ -211,11 +230,15 @@ class SQLiteDatabase:
 
     def initialize(self):
         with self.cursor() as cursor:
-            cursor._cursor.executescript(SQLITE_SCHEMA)
+            # Columns first: the schema script creates indexes on columns old files do not have
             for table, column, definition in SQLITE_MIGRATIONS:
                 existing = {row["name"] for row in cursor.execute(f"PRAGMA table_info({table})").fetchall()}
-                if column not in existing:
+                if existing and column not in existing:
                     cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+            cursor._cursor.executescript(SQLITE_SCHEMA)
+            # Conversations created before per-user history belong to the local user
+            for table in ("conversations", "attachments"):
+                cursor.execute(f"UPDATE {table} SET owner = ? WHERE owner IS NULL", (SQLITE_DEFAULT_OWNER,))
             # Documents stored before the "chars" column existed
             cursor.execute("UPDATE attachments SET chars = LENGTH(text) WHERE chars IS NULL")
 
@@ -289,6 +312,12 @@ class HanaDatabase:
             ).fetchall()}
             for name, ddl in HANA_TABLES.items():
                 if name not in existing:
+                    cursor.execute(ddl)
+            columns = {(row["table_name"], row["column_name"]) for row in cursor.execute(
+                "SELECT TABLE_NAME, COLUMN_NAME FROM SYS.TABLE_COLUMNS WHERE SCHEMA_NAME = CURRENT_SCHEMA"
+            ).fetchall()}
+            for table, column, ddl in HANA_MIGRATIONS:
+                if (table, column) not in columns:
                     cursor.execute(ddl)
             indexes = {row["index_name"] for row in cursor.execute(
                 "SELECT INDEX_NAME FROM SYS.INDEXES WHERE SCHEMA_NAME = CURRENT_SCHEMA"
