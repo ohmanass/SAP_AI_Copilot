@@ -10,6 +10,7 @@ framework:
     - name: sap.tnt
     - name: sap.ui.core
     - name: sap.ui.layout
+    - name: sap.ui.export
     - name: themelib_sap_horizon
 server:
   settings:

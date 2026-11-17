@@ -43,7 +43,10 @@
 				"sap.ui.core": {},
 				"sap.m": {},
 				"sap.tnt": {},
-				"sap.ui.layout": {}
+				"sap.ui.layout": {},
+				"sap.ui.export": {
+					"lazy": true
+				}
 			}
 		},
 		"contentDensities": {

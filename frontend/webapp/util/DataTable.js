@@ -10,11 +10,14 @@ sap.ui.define([
 	"sap/m/ColumnListItem",
 	"sap/m/ObjectNumber",
 	"sap/m/ObjectStatus",
+	"sap/m/Button",
+	"sap/m/MessageToast",
 	"sap/ui/core/ResizeHandler",
 	"sap/ui/core/format/DateFormat",
-	"sap/ui/core/format/NumberFormat"
+	"sap/ui/core/format/NumberFormat",
+	"./DataTableExport"
 ], (VBox, HBox, FlexBox, Title, Text, Label, Table, Column, ColumnListItem, ObjectNumber, ObjectStatus,
-	ResizeHandler, DateFormat, NumberFormat) => {
+	Button, MessageToast, ResizeHandler, DateFormat, NumberFormat, DataTableExport) => {
 	"use strict";
 
 	/**
@@ -100,6 +103,7 @@ sap.ui.define([
 
 			const label = (key) => optionalText(`dataCol.${key}`, key);
 			const statusText = (value) => (isEmpty(value) ? "" : optionalText(`dataStatus.${value}`, String(value)));
+			const blockText = (value) => (isEmpty(value) ? "" : text("dataBlocked", [value]));
 
 			/** Value control for a column type, bound to a row (or attribute) property. */
 			const valueControl = (type, path, unitPath) => {
@@ -129,7 +133,7 @@ sap.ui.define([
 					case "block":
 						// Payment block code (e.g. A, R): shown in red when set
 						return new ObjectStatus({
-							text: { path, formatter: (value) => (isEmpty(value) ? "" : text("dataBlocked", [value])) },
+							text: { path, formatter: blockText },
 							state: "Error",
 							icon: { path, formatter: (value) => (isEmpty(value) ? "" : "sap-icon://locked") }
 						});
@@ -156,13 +160,50 @@ sap.ui.define([
 					" " + optionalText(`dataTotalUnit.${table.total_unit}`, ""));
 			}
 
+			const headerItems = [
+				new Title({ text: title, level: "H3", wrapping: true }).addStyleClass("cpDataTitle"),
+				new Text({ text: table.rows.length ? text(table.rows.length === 1 ? "dataRow" : "dataRows", [table.rows.length]) : "" }).addStyleClass("cpDataCount")
+			];
+			if (table.rows.length) {
+				headerItems.push(new Button({
+					icon: "sap-icon://excel-attachment",
+					type: "Transparent",
+					tooltip: text("dataExport"),
+					press: (event) => {
+						const button = event.getSource();
+						button.setEnabled(false);
+						DataTableExport.download(table, {
+							title,
+							label,
+							statusText,
+							blockText,
+							text,
+							attributeText: (attribute) => {
+								switch (attribute.type) {
+									case "date":
+										return formatDate(attribute.value);
+									case "amount":
+									case "quantity":
+									case "number":
+										return [formatNumber(attribute.value, attribute.type), attribute.unit].filter(Boolean).join(" ");
+									case "status":
+										return statusText(attribute.value);
+									case "block":
+										return blockText(attribute.value);
+									default:
+										return isEmpty(attribute.value) ? "" : String(attribute.value);
+								}
+							}
+						}).catch(() => MessageToast.show(text("dataExportError")))
+							.finally(() => button.setEnabled(true));
+					}
+				}).addStyleClass("cpDataExport"));
+			}
+
 			container.addItem(new HBox({
 				renderType: "Bare",
 				alignItems: "Center",
-				items: [
-					new Title({ text: title, level: "H3", wrapping: true }).addStyleClass("cpDataTitle"),
-					new Text({ text: table.rows.length ? text(table.rows.length === 1 ? "dataRow" : "dataRows", [table.rows.length]) : "" }).addStyleClass("cpDataCount")
-				]
+				items: headerItems
 			}).addStyleClass("cpDataHeader"));
 
 			if (meta.length) {

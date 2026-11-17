@@ -904,6 +904,25 @@ html, body.cpBody {
 	justify-content: space-between;
 }
 
+.cpDataHeader .cpDataTitle {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.cpDataExport.sapMBtn {
+	flex: none;
+	height: auto;
+	margin: -0.375rem -0.5rem -0.375rem 0;
+}
+
+.cpDataExport .sapMBtnIcon {
+	color: var(--cp-muted);
+}
+
+.cpDataExport:hover .sapMBtnIcon {
+	color: #34d399;
+}
+
 .cpDataTitle.sapMTitle {
 	font-size: 0.9375rem;
 	font-weight: 600;

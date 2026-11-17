@@ -28,6 +28,7 @@ L'application fonctionne en local et se déploie sur **SAP BTP (Cloud Foundry)**
 - Sources RAG affichées sous chaque réponse, avec l'extrait réellement récupéré dans ChromaDB et sa distance vectorielle
 - Outils utilisés par l'agent affichés pour chaque réponse
 - **Tableaux Fiori** sous la réponse pour les données SAP (commandes d'achat, commandes clients, factures fournisseurs et rapprochement à trois) : en-tête du document, postes, montants, dates, statuts colorés, jours de retard, blocages de paiement. Les tableaux sont construits par le backend à partir des résultats des outils, jamais à partir du texte du modèle. Un clic sur une ligne d'une liste ouvre l'analyse du document. Les colonnes secondaires sont masquées quand la place manque
+- **Export Excel** de chaque tableau (bouton dans son en-tête) : toutes les colonnes, y compris celles masquées à l'écran, avec des cellules typées (dates, nombres, montants dans leur devise, quantités et unités) et une feuille *Information* (système SAP, période, totaux, en-tête du document, date d'export). Le fichier `.xlsx` est généré dans le navigateur (`sap.ui.export`) et contient les lignes affichées
 - Page **Modules** : un espace de travail par module SAP, avec un statut réel (connecté, documentation, prévu), ses outils, sa documentation et ses suggestions
 - Historique persistant : nouvelle conversation, liste, reprise, renommage, suppression. Chaque conversation garde son module. Le contexte de l'agent est restauré après un redémarrage du backend
 - Page **Knowledge Base** : documents indexés, nombre de chunks indexés et attendus, statut d'indexation
@@ -105,7 +106,7 @@ SAP_AI_Copilot/
 │       ├── controller/     # App, Chat, KnowledgeBase, Settings
 │       ├── view/           # Vues XML
 │       ├── service/        # Client REST centralisé
-│       ├── util/           # Rendu Markdown sécurisé, tableaux de données SAP
+│       ├── util/           # Rendu Markdown sécurisé, tableaux de données SAP et export Excel
 │       ├── css/            # Thème
 │       └── i18n/           # Textes
 └── requirements.txt
