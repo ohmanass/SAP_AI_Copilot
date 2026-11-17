@@ -278,12 +278,17 @@ TOOLS = [
         "function": {
             "name": "search_sap_documentation",
             "description": """
-            Search the SAP technical documentation for information
-            about SAP tables, ABAP, CDS Views, OData, Fiori,
-            SAP MM, SAP BTP and other SAP technical concepts.
+            Search the knowledge base: the SAP technical documentation
+            (SAP tables, ABAP, CDS Views, OData, Fiori, MM, SD, FI, BTP)
+            and the documents added by users (policies, procedures, lists,
+            data exports such as CSV or Excel files, notes...).
 
-            Use this tool for technical questions that require
-            documentation.
+            Use it for technical questions, and for any question about
+            information that may be in a document of the knowledge base
+            (see the KNOWLEDGE BASE catalogue in the instructions), for
+            example a user, a value or a rule listed in an added file.
+            Put the distinctive words of the question in the query
+            (names, codes, dates, file name).
 
             It can be combined with transactional database tools
             when the user asks for both data analysis and technical explanations.
@@ -293,7 +298,7 @@ TOOLS = [
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "The technical question to search for."
+                        "description": "The question or the distinctive words to search for."
                     },
                     "n_results": {
                         "type": "integer",
@@ -388,8 +393,8 @@ class SAPAgent:
                     purchase order (ordered / received / invoiced, per item).
 
                     Documentation:
-                    - search_sap_documentation: searches the SAP technical
-                    documentation using RAG.
+                    - search_sap_documentation: searches the knowledge base
+                    (SAP documentation and documents added by users) using RAG.
 
                     Purchase orders (suppliers) and sales orders (customers)
                     are different documents: never mix them up.
@@ -413,7 +418,12 @@ class SAPAgent:
                     TOOL USAGE RULES:
 
                     - Use database tools for transactional information.
-                    - Use search_sap_documentation for technical questions.
+                    - Use search_sap_documentation for technical questions and
+                    for questions about the content of the knowledge base.
+                    - Never answer that you have no access to some information
+                    before searching the knowledge base when a document of the
+                    catalogue may contain it, or when the user mentions the
+                    knowledge base or a file name.
                     - Use multiple tools when the question requires both
                     transactional data and technical documentation.
                     - Never invent database information.
@@ -452,6 +462,27 @@ class SAPAgent:
                 f"Only these tools are available in this workspace: {available}. "
                 "Ignore the other tools listed above."
             )
+
+        # The knowledge base catalogue is appended to this prompt before each question
+        self._system_prompt = self.messages[0]["content"]
+
+    def _refresh_knowledge_catalogue(self):
+        """List the documents the agent can search, so it knows what the knowledge base holds."""
+        try:
+            from app.rag.knowledge_store import list_documents
+            documents = list_documents()
+        except Exception:
+            self.messages[0]["content"] = self._system_prompt
+            return
+        if self.module:
+            allowed = set(self._module_sources())
+            documents = [d for d in documents if d["name"] in allowed]
+        names = [d["name"] for d in documents][:60]
+        catalogue = (
+            "\n\nKNOWLEDGE BASE: documents searchable with search_sap_documentation"
+            " in this workspace: " + (", ".join(names) if names else "none") + "."
+        )
+        self.messages[0]["content"] = self._system_prompt + catalogue
 
     def execute_tool(self, tool_name, arguments):
 
@@ -567,6 +598,8 @@ class SAPAgent:
             })
 
     def _run(self, user_input, tools_used, sources, tables):
+
+        self._refresh_knowledge_catalogue()
 
         self.messages.append({
             "role": "user",
@@ -690,6 +723,7 @@ class SAPAgent:
         sources = []
         tables = []
         completed = False
+        self._refresh_knowledge_catalogue()
 
         try:
             self.messages.append({

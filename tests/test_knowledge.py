@@ -75,6 +75,7 @@ def kb(request, tmp_path, monkeypatch):
 
 MM_TEXT = "EKKO stores the purchase order header.\n\nEKPO stores the purchase order items."
 FI_TEXT = "The GR/IR clearing account balances goods receipts and supplier invoices."
+USERS_CSV = "USERNAME;VALID_UNTIL\nuser_a;2030.12.18"
 
 
 def test_shipped_documents_are_synchronised(kb):
@@ -150,6 +151,46 @@ def test_uploaded_documents(kb):
     with pytest.raises(RuntimeError):
         knowledge_store.add_document("pytest_broken.txt", "Some text", None, ALICE)
     assert knowledge_store.get_document("pytest_broken.txt") is None
+
+
+def test_documents_for_every_workspace_are_searched_in_each_module(kb):
+    knowledge_store.add_document("pytest_users.csv", USERS_CSV, None, ALICE)
+    knowledge_store.add_document("pytest_fi_only.txt", FI_TEXT, "fi", ALICE)
+    assert knowledge_store.sources_for_module("fi") == ["pytest_fi_only.txt", "pytest_users.csv"]
+    assert knowledge_store.sources_for_module("mm") == ["pytest_users.csv"]
+
+
+def test_tabular_files_are_split_by_rows_with_their_header():
+    rows = [f"user_{i};2030.12.{i % 28 + 1:02d}" for i in range(100)]
+    csv = "\n".join(["USERNAME;VALID_UNTIL"] + rows)
+    chunks = knowledge_store.split_document("users.csv", csv)
+    assert len(chunks) > 1
+    assert all(chunk.startswith("USERNAME;VALID_UNTIL\n") and len(chunk) <= 800 for chunk in chunks)
+    assert [line for chunk in chunks for line in chunk.splitlines()[1:]] == rows   # every row once, in order
+
+    sheets = "[Sheet Users]\nNAME\tUNTIL\na\t1\n\n[Sheet Groups]\nGROUP\nadmins"
+    assert knowledge_store.split_document("book.xlsx", sheets) == [
+        "[Sheet Users]\nNAME\tUNTIL\na\t1", "[Sheet Groups]\nGROUP\nadmins"]
+    # Other documents keep the paragraph splitter
+    assert knowledge_store.split_document("notes.txt", "A\n\nB") == ["A\n\nB"]
+
+
+def test_agent_knows_the_documents_of_its_workspace(kb):
+    from app.agent.agent import SAPAgent
+    from app.modules import MODULES
+
+    knowledge_store.add_document("pytest_users.csv", USERS_CSV, None, ALICE)
+    knowledge_store.add_document("pytest_sd_only.txt", "Sales note", "sd", ALICE)
+    agent = SAPAgent.__new__(SAPAgent)
+    agent.module = next(m for m in MODULES if m.key == "fi")
+    agent._system_prompt = "PROMPT"
+    agent.messages = [{"role": "system", "content": "PROMPT"}]
+    agent._refresh_knowledge_catalogue()
+    catalogue = agent.messages[0]["content"]
+    assert catalogue.startswith("PROMPT") and "pytest_users.csv" in catalogue
+    assert "pytest_sd_only.txt" not in catalogue
+    agent._refresh_knowledge_catalogue()                    # refreshed, not appended twice
+    assert agent.messages[0]["content"].count("KNOWLEDGE BASE") == 1
 
 
 def test_module_workspace_searches_its_added_documents(kb):

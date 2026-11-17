@@ -67,6 +67,42 @@ def _hash(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+TABULAR_EXTENSIONS = {".csv", ".tsv", ".xlsx"}
+
+
+def split_rows(text, chunk_size=800):
+    """
+    Tabular text (CSV, TSV, Excel sheets) split by rows, the header repeated in
+    every chunk: each chunk stays readable on its own ("VALID_UNTIL" above its values).
+    """
+
+    chunks = []
+    for block in text.split("\n\n"):
+        lines = [line for line in block.splitlines() if line.strip()]
+        if not lines:
+            continue
+        # Excel: "[Sheet name]" then the header row
+        header_size = 2 if lines[0].startswith("[Sheet ") and len(lines) > 1 else 1
+        header, rows = "\n".join(lines[:header_size]), lines[header_size:]
+        if not rows:
+            chunks.append(header)
+            continue
+        current = []
+        for row in rows:
+            if current and len(header) + sum(len(r) + 1 for r in current) + len(row) + 1 > chunk_size:
+                chunks.append(header + "\n" + "\n".join(current))
+                current = []
+            current.append(row)
+        chunks.append(header + "\n" + "\n".join(current))
+    return chunks
+
+
+def split_document(name, text):
+    if Path(name).suffix.lower() in TABULAR_EXTENSIONS:
+        return split_rows(text)
+    return split_text(text)
+
+
 # ----------------------------------------------------------------------
 # Vector stores
 # ----------------------------------------------------------------------
@@ -227,16 +263,20 @@ def get_document(name):
 
 
 def sources_for_module(module_key):
-    """Documents searched in a module workspace."""
+    """Documents searched in a module workspace: its own and those added for every workspace."""
     with _registry().cursor() as cursor:
-        rows = cursor.execute("SELECT name FROM kb_documents WHERE module = ?", (module_key,)).fetchall()
+        rows = cursor.execute(
+            "SELECT name FROM kb_documents WHERE module = ? OR (module IS NULL AND origin = 'uploaded')"
+            " ORDER BY name",
+            (module_key,)
+        ).fetchall()
     return [row["name"] for row in rows]
 
 
 def _index(name, text, module, origin, uploaded_by, size_bytes):
     """Chunks, embeds and stores a document (vectors first: a failed embedding leaves nothing behind)."""
 
-    chunks = split_text(text)
+    chunks = split_document(name, text)
     if not chunks:
         raise KnowledgeError("The document contains no text to index.", 422)
     vectors = embed(chunks)
