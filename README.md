@@ -91,6 +91,7 @@ SAP_AI_Copilot/
 │   ├── database/           # Schéma et jeu de données SQLite
 │   └── storage/            # Persistance de l'historique des conversations
 ├── data/documents/         # Documentation indexée par le RAG
+├── tests/                  # Tests pytest (rapprochement à trois, tableaux, connexion SAP)
 ├── deploy/
 │   ├── approuter/          # Application Router (package.json, xs-app.json)
 │   ├── manifest.yml        # Applications Cloud Foundry
@@ -231,6 +232,15 @@ L'application s'ouvre sur `http://localhost:8080/index.html`. Le serveur de dév
 | `npm run lint` | Analyse du code SAPUI5 (UI5 linter) |
 | `npm run build` | Build de production dans `frontend/dist` |
 | `python -m app.main` | Version en ligne de commande de l'agent |
+| `python -m pytest` | Tests automatisés du backend (depuis la racine du projet) |
+
+### Tests
+
+`python -m pytest` lance les tests du backend. Ils simulent toutes les réponses externes (S/4HANA, Destination service) : ils tournent hors ligne, sans clé ni identifiants, en moins d'une seconde. Ils couvrent :
+
+- le **rapprochement à trois** : chaque statut, retours et annulations d'entrées, avoirs, factures annulées, débits ultérieurs, tolérance de prix, solde GR/IR, numéros de poste au format différent selon l'API ;
+- les **tableaux de données** : colonnes sans valeur retirées, limite de lignes, unités de total, actions sur les lignes, dédoublonnage ;
+- la **connexion SAP** : mode direct, lecture de la destination (en-têtes d'authentification, `URL.headers.*`, `URL.queries.*`, cache et expiration des jetons, erreurs) et construction des requêtes OData.
 
 ## Déploiement sur SAP BTP
 
