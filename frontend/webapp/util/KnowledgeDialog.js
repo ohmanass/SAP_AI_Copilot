@@ -18,7 +18,9 @@ sap.ui.define([
 
 	const EXTENSIONS = [
 		".pdf", ".docx", ".xlsx", ".txt", ".md", ".csv", ".tsv", ".json", ".xml", ".log",
-		".sql", ".abap", ".yaml", ".yml", ".html", ".htm"
+		".sql", ".abap", ".yaml", ".yml", ".html", ".htm",
+		// Images: read by the AI model (app/attachments/vision.py)
+		".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"
 	];
 	const MAX_BYTES = 10 * 1024 * 1024;
 

@@ -49,9 +49,12 @@ sap.ui.define([
 			model.setProperty("/adding", true);
 			try {
 				const document = await this.getService().addKnowledgeDocument(choice.file, choice.module);
-				const masked = this.formatter.maskedSummary.call(this, document.masked);
-				MessageToast.show(this.getText("kbAdded", [document.name, document.chunks]) + (masked ? ` ${masked}` : ""),
-					{ duration: masked ? 6000 : 3000 });
+				const notes = [
+					this.formatter.transcribedNote.call(this, document.transcribed),
+					this.formatter.maskedSummary.call(this, document.masked)
+				].filter(Boolean).join(" ");
+				MessageToast.show(this.getText("kbAdded", [document.name, document.chunks]) + (notes ? ` ${notes}` : ""),
+					{ duration: notes ? 6000 : 3000 });
 				this.getOwnerComponent().refreshModules();
 				await this._load();
 			} catch (error) {

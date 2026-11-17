@@ -9,3 +9,4 @@ sap-xssec
 pypdf
 python-multipart
 hdbcli
+pillow

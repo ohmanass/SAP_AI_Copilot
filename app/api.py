@@ -358,7 +358,8 @@ def add_knowledge_document(file: UploadFile = File(...), module: str = Form(""),
         text, _, _ = attachment_extract.extract_text(name, data)
     except attachment_extract.ExtractionError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
-    return knowledge_store.add_document(name, text, module, user, len(data))
+    document = knowledge_store.add_document(name, text, module, user, len(data))
+    return dict(document, transcribed=attachment_extract.transcribed_parts(text))
 
 
 class AttachmentToKnowledge(BaseModel):
@@ -439,7 +440,9 @@ def upload_attachment(session_id: str, file: UploadFile = File(...), user: str =
 
     # Credentials and card numbers never reach the database nor the model
     text, masked = attachment_sensitive.mask(text, name, attachment_sensitive.PRIVATE)
-    return chat_store.add_attachment(session_id, user, name, len(data), pages, text, truncated, masked)
+    summary = chat_store.add_attachment(session_id, user, name, len(data), pages, text, truncated, masked)
+    # Images and scanned pages read by the AI model: the user is told to check the values
+    return dict(summary, transcribed=attachment_extract.transcribed_parts(text))
 
 
 @app.get("/api/sessions/{session_id}/attachments")

@@ -27,7 +27,9 @@ sap.ui.define([
 	// Attached documents: same limits as the backend (app/attachments/extract.py)
 	const ATTACHMENT_EXTENSIONS = [
 		".pdf", ".docx", ".xlsx", ".txt", ".md", ".csv", ".tsv", ".json", ".xml", ".log",
-		".sql", ".abap", ".yaml", ".yml", ".html", ".htm"
+		".sql", ".abap", ".yaml", ".yml", ".html", ".htm",
+		// Images: read by the AI model (app/attachments/vision.py)
+		".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"
 	];
 	const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
 	const ATTACHMENT_ICONS = {
@@ -35,7 +37,15 @@ sap.ui.define([
 		".docx": "sap-icon://doc-attachment",
 		".xlsx": "sap-icon://excel-attachment",
 		".csv": "sap-icon://excel-attachment",
-		".tsv": "sap-icon://excel-attachment"
+		".tsv": "sap-icon://excel-attachment",
+		".png": "sap-icon://attachment-photo",
+		".jpg": "sap-icon://attachment-photo",
+		".jpeg": "sap-icon://attachment-photo",
+		".webp": "sap-icon://attachment-photo",
+		".gif": "sap-icon://attachment-photo",
+		".bmp": "sap-icon://attachment-photo",
+		".tif": "sap-icon://attachment-photo",
+		".tiff": "sap-icon://attachment-photo"
 	};
 
 	const extensionOf = (name) => {
@@ -702,9 +712,12 @@ sap.ui.define([
 						return;
 					}
 					this._replaceAttachment(entry.localId, Object.assign(summary, { localId: entry.localId, uploading: false }));
-					const masked = this.formatter.maskedSummary.call(this, summary.masked);
-					if (masked) {
-						MessageToast.show(`${summary.name}: ${masked}`, { duration: 5000 });
+					const notes = [
+						this.formatter.transcribedNote.call(this, summary.transcribed),
+						this.formatter.maskedSummary.call(this, summary.masked)
+					].filter(Boolean);
+					if (notes.length) {
+						MessageToast.show(`${summary.name}: ${notes.join(" ")}`, { duration: 6000 });
 					}
 				} catch (error) {
 					if (key !== this._conversationKey) {

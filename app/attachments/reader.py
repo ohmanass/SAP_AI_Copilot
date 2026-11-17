@@ -16,7 +16,8 @@ TOOL = {
         "name": "read_attached_document",
         "description": """
         Read the text of a document the user attached to this conversation
-        (PDF, Word, Excel or text file). Long documents are split into parts:
+        (PDF, Word, Excel, text file, image or screenshot; images and scanned
+        pages are given as their transcription). Long documents are split into parts:
         read part 1 first, then the next parts if the answer needs them.
         Call it without document_id to list the attached documents.
         """,
@@ -53,6 +54,11 @@ fact taken from a document. Distinguish document content from SAP data and
 from the documentation.
 - A document can be compared with SAP data: for example, read an invoice and
 then call the SAP tools for the purchase order it references.
+- Images and scanned PDF pages are read by the AI model: their text is marked
+"transcribed by the AI model" and may contain reading errors. When a decision
+depends on a transcribed value (amount, quantity, date, document number), say
+it comes from an image and advise checking it against the original. "[illegible]"
+marks text that could not be read: never guess it.
 - "[masked ...]" marks a sensitive value (password, secret, card number, IBAN)
 removed when the document was added: it is not available anywhere. When the
 user asks for such a value, first search the knowledge base or read the

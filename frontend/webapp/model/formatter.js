@@ -28,6 +28,14 @@ sap.ui.define([
 			return this.getText("maskedSummary", [parts.join(", ")]);
 		},
 
+		/** Images or scanned pages of a document read by the AI model (count from the backend). */
+		transcribedNote(count) {
+			if (!count) {
+				return "";
+			}
+			return count === 1 ? this.getText("transcribedOne") : this.getText("transcribedPages", [count]);
+		},
+
 		upper(value) {
 			return value ? String(value).toUpperCase() : "";
 		},

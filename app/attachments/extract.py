@@ -4,9 +4,10 @@ Text extraction from documents attached to a conversation.
 Only text is extracted: no macro, script or embedded object is ever executed.
 Supported:
   text      .txt .md .csv .tsv .json .xml .log .sql .abap .yaml .yml .html .htm
-  PDF       .pdf  (pypdf, text layer only: scanned PDFs without OCR have no text)
+  PDF       .pdf  (pypdf text layer; scanned pages are transcribed by the AI model, see vision.py)
   Word      .docx (Office Open XML, read with the standard library)
   Excel     .xlsx (Office Open XML, read with the standard library; one block per sheet)
+  images    .png .jpg .jpeg .webp .gif .bmp .tif .tiff (transcribed by the AI model, see vision.py)
 """
 
 import io
@@ -14,6 +15,8 @@ import re
 import zipfile
 from pathlib import PurePath
 from xml.etree import ElementTree
+
+from app.attachments import vision
 
 MAX_FILE_BYTES = 10 * 1024 * 1024        # 10 MB per file
 MAX_TEXT_CHARS = 400_000                 # text kept per document
@@ -24,7 +27,11 @@ TEXT_EXTENSIONS = {
     ".txt", ".md", ".csv", ".tsv", ".json", ".xml", ".log", ".sql", ".abap",
     ".yaml", ".yml", ".html", ".htm"
 }
-SUPPORTED_EXTENSIONS = TEXT_EXTENSIONS | {".pdf", ".docx", ".xlsx"}
+SUPPORTED_EXTENSIONS = TEXT_EXTENSIONS | {".pdf", ".docx", ".xlsx"} | vision.IMAGE_EXTENSIONS
+
+# Marks the text read from an image by the AI model (the agent and the user see it)
+TRANSCRIBED = "transcribed by the AI model"
+IMAGE_HEADER = f"[Image {TRANSCRIBED}: check key values against the original]"
 
 WORD_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 SHEET_NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
@@ -59,19 +66,66 @@ def _pdf(data: bytes):
             # Empty owner password is common for "protected" but readable PDFs
             if not reader.decrypt(""):
                 raise ExtractionError("The PDF is password-protected.")
-        pages = []
-        for number, page in enumerate(reader.pages, start=1):
-            text = (page.extract_text() or "").strip()
-            pages.append(f"[Page {number}]\n{text}")
+        texts = [(page.extract_text() or "").strip() for page in reader.pages]
+        # Pages without text layer: scanned pages, read from their image
+        scans = {}
+        for index, text in enumerate(texts):
+            if not text and len(scans) < vision.MAX_SCANNED_PAGES:
+                image = _page_image(reader.pages[index])
+                if image:
+                    scans[index] = image
     except ExtractionError:
         raise
     except (PdfReadError, ValueError, KeyError, TypeError) as error:
         raise ExtractionError("The PDF could not be read.") from error
 
-    text = "\n\n".join(pages)
-    if not re.sub(r"\[Page \d+\]", "", text).strip():
-        raise ExtractionError("The PDF contains no text (probably a scanned document without OCR).")
-    return text, len(pages)
+    if scans:
+        for index, transcription in zip(scans, _transcribe(list(scans.values()))):
+            if transcription:
+                texts[index] = f"[{TRANSCRIBED} from the scanned page]\n{transcription}"
+    skipped = sum(1 for text in texts if not text) if len(scans) == vision.MAX_SCANNED_PAGES else 0
+
+    pages = [f"[Page {number}]\n{text}" for number, text in enumerate(texts, start=1)]
+    if skipped:
+        pages.append(f"[{skipped} more page(s) without text were not read: "
+                     f"at most {vision.MAX_SCANNED_PAGES} scanned pages are read per PDF]")
+    if not any(texts):
+        raise ExtractionError("The PDF contains no text and no readable scanned page.")
+    return "\n\n".join(pages), len(texts)
+
+
+def _page_image(page):
+    """Largest image of a PDF page (the scan), as bytes, or None."""
+
+    best = None
+    try:
+        for image in page.images:
+            data = image.data
+            if best is None or len(data) > len(best):
+                best = data
+    except Exception:       # unsupported image encoding: the page stays without text
+        return None
+    return best
+
+
+def _transcribe(images):
+    try:
+        return vision.transcribe(images)
+    except vision.VisionError as error:
+        raise ExtractionError(str(error)) from error
+
+
+def _image(data: bytes):
+    transcription = _transcribe([data])[0]
+    if not transcription:
+        raise ExtractionError("The image is too small to contain readable content.")
+    return f"{IMAGE_HEADER}\n{transcription}", None
+
+
+def transcribed_parts(text: str) -> int:
+    """Number of images or scanned pages of a document read by the AI model."""
+
+    return (text or "").count(TRANSCRIBED)
 
 
 def _open_office(data: bytes):
@@ -170,7 +224,8 @@ def extract_text(filename: str, data: bytes):
     ext = extension(filename)
     if ext not in SUPPORTED_EXTENSIONS:
         raise ExtractionError(
-            f"Unsupported file type '{ext or 'none'}'. Supported: PDF, Word (.docx), Excel (.xlsx) and text files."
+            f"Unsupported file type '{ext or 'none'}'. "
+            "Supported: PDF, Word (.docx), Excel (.xlsx), images and text files."
         )
     if not data:
         raise ExtractionError("The file is empty.")
@@ -184,6 +239,8 @@ def extract_text(filename: str, data: bytes):
             text, pages = _docx(data)
         elif ext == ".xlsx":
             text, pages = _xlsx(data)
+        elif ext in vision.IMAGE_EXTENSIONS:
+            text, pages = _image(data)
         else:
             text, pages = _decode(data), None
     except zipfile.BadZipFile as error:

@@ -201,7 +201,7 @@ sap.ui.define([
 			return this._request(`sessions/${encodeURIComponent(sessionId)}/attachments`, {
 				method: "POST",
 				formData: form,
-				timeoutMs: 120000
+				timeoutMs: 180000      // images and scanned pages are read by the AI model
 			});
 		},
 
