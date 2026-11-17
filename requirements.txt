@@ -8,3 +8,4 @@ httpx
 sap-xssec
 pypdf
 python-multipart
+hdbcli

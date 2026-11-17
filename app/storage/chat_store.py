@@ -1,59 +1,23 @@
 """
-Persistent chat history for SAP AI Copilot.
+Persistent chat history for SAP AI Copilot: conversations, messages and
+attached documents.
 
-Conversations are stored in a dedicated SQLite file (data/chat_history.db),
-kept separate from the SAP business database (data/sap.db).
+Stored in SAP HANA Cloud on SAP BTP (bound "hana" schema service) and in a
+local SQLite file otherwise (data/chat_history.db), kept separate from the SAP
+business data. See app.storage.database. The SQL below runs on both engines.
 """
 
 import json
-import sqlite3
-from contextlib import contextmanager
+import logging
+import threading
 from datetime import datetime, timezone
-from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-CHAT_DB_PATH = PROJECT_ROOT / "data" / "chat_history.db"
+from app.storage.database import StoreUnavailable, get_database
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS conversations (
-    session_id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
+logger = logging.getLogger("sap_ai_copilot.chat_store")
 
-CREATE TABLE IF NOT EXISTS messages (
-    message_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
-    content TEXT NOT NULL,
-    sources TEXT NOT NULL DEFAULT '[]',
-    tools_used TEXT NOT NULL DEFAULT '[]',
-    created_at TEXT NOT NULL,
-    FOREIGN KEY (session_id)
-        REFERENCES conversations(session_id)
-        ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_messages_session
-    ON messages(session_id, message_id);
-
--- Documents attached to a conversation. No foreign key: a document can be
--- uploaded before the first message creates the conversation.
-CREATE TABLE IF NOT EXISTS attachments (
-    attachment_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    size_bytes INTEGER NOT NULL,
-    pages INTEGER,
-    text TEXT NOT NULL,
-    truncated INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_attachments_session
-    ON attachments(session_id, attachment_id);
-"""
+_initialized = False
+_init_lock = threading.Lock()
 
 TITLE_MAX_LENGTH = 60
 
@@ -62,43 +26,42 @@ def _now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-@contextmanager
-def _connect():
-    """Open a connection, commit on success, roll back on error, always close."""
-
-    CHAT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-
-    connection = sqlite3.connect(CHAT_DB_PATH)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
-
-    try:
-        yield connection
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
-
-
 def initialize():
-    with _connect() as connection:
-        connection.executescript(SCHEMA)
+    """Create the tables. Never blocks the startup: retried on first use if the database is down."""
+    try:
+        _database()
+    except StoreUnavailable as error:
+        logger.warning("Chat history not available at startup: %s", error)
 
-        # Additive migration: module workspace of a conversation (NULL = general)
-        columns = {row["name"] for row in connection.execute("PRAGMA table_info(conversations)")}
-        if "module" not in columns:
-            connection.execute("ALTER TABLE conversations ADD COLUMN module TEXT")
 
-        # Additive migration: SAP data tables shown under an answer (JSON list)
-        columns = {row["name"] for row in connection.execute("PRAGMA table_info(messages)")}
-        if "tables" not in columns:
-            connection.execute("ALTER TABLE messages ADD COLUMN tables TEXT NOT NULL DEFAULT '[]'")
+def reset():
+    """Forget the initialisation (tests, database switch)."""
+    global _initialized
+    _initialized = False
 
-        # Additive migration: documents sent with a user message (JSON list of summaries)
-        if "attachments" not in columns:
-            connection.execute("ALTER TABLE messages ADD COLUMN attachments TEXT NOT NULL DEFAULT '[]'")
+
+def _database():
+    global _initialized
+    database = get_database()
+    if not _initialized:
+        with _init_lock:
+            if not _initialized:
+                database.initialize()
+                _initialized = True
+    return database
+
+
+def describe():
+    """Engine of the history, for the status page."""
+    info = get_database().describe()
+    try:
+        with _database().cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) AS conversations FROM conversations")
+            info["conversations"] = cursor.fetchone()["conversations"]
+        info.update(available=True, error=None)
+    except Exception as error:  # status page: never fails
+        info.update(available=False, error=str(error) if isinstance(error, StoreUnavailable) else type(error).__name__)
+    return info
 
 
 def build_title(message: str) -> str:
@@ -111,9 +74,9 @@ def build_title(message: str) -> str:
 
 
 def conversation_exists(session_id: str) -> bool:
-    with _connect() as connection:
-        row = connection.execute(
-            "SELECT 1 FROM conversations WHERE session_id = ?",
+    with _database().cursor() as cursor:
+        row = cursor.execute(
+            "SELECT 1 AS found FROM conversations WHERE session_id = ?",
             (session_id,)
         ).fetchone()
 
@@ -134,17 +97,22 @@ def save_exchange(
 
     now = _now()
 
-    with _connect() as connection:
-        connection.execute(
-            """
-            INSERT INTO conversations (session_id, title, created_at, updated_at, module)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(session_id) DO UPDATE SET updated_at = excluded.updated_at
-            """,
-            (session_id, build_title(user_message), now, now, module)
+    with _database().cursor() as cursor:
+        # Update first, insert when the conversation is new (no engine-specific upsert)
+        cursor.execute(
+            "UPDATE conversations SET updated_at = ? WHERE session_id = ?",
+            (now, session_id)
         )
+        if cursor.rowcount == 0:
+            cursor.execute(
+                """
+                INSERT INTO conversations (session_id, title, created_at, updated_at, module)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (session_id, build_title(user_message), now, now, module)
+            )
 
-        connection.executemany(
+        cursor.executemany(
             """
             INSERT INTO messages
                 (session_id, role, content, sources, tools_used, tables, attachments, created_at)
@@ -168,8 +136,8 @@ def save_exchange(
 
 
 def list_conversations():
-    with _connect() as connection:
-        rows = connection.execute(
+    with _database().cursor() as cursor:
+        rows = cursor.execute(
             """
             SELECT
                 c.session_id,
@@ -177,21 +145,18 @@ def list_conversations():
                 c.created_at,
                 c.updated_at,
                 c.module,
-                COUNT(m.message_id) AS message_count
+                (SELECT COUNT(*) FROM messages m WHERE m.session_id = c.session_id) AS message_count
             FROM conversations c
-            LEFT JOIN messages m
-                ON m.session_id = c.session_id
-            GROUP BY c.session_id
             ORDER BY c.updated_at DESC
             """
         ).fetchall()
 
-    return [dict(row) for row in rows]
+    return rows
 
 
 def get_conversation(session_id: str):
-    with _connect() as connection:
-        conversation = connection.execute(
+    with _database().cursor() as cursor:
+        conversation = cursor.execute(
             """
             SELECT session_id, title, created_at, updated_at, module
             FROM conversations
@@ -203,7 +168,7 @@ def get_conversation(session_id: str):
         if conversation is None:
             return None
 
-        rows = connection.execute(
+        rows = cursor.execute(
             """
             SELECT role, content, sources, tools_used, tables, attachments, created_at
             FROM messages
@@ -233,33 +198,32 @@ def get_conversation(session_id: str):
 def rename_conversation(session_id: str, title: str) -> bool:
     """Change a conversation title (normalised like generated titles)."""
 
-    with _connect() as connection:
-        cursor = connection.execute(
+    with _database().cursor() as cursor:
+        cursor.execute(
             "UPDATE conversations SET title = ? WHERE session_id = ?",
             (build_title(title), session_id)
         )
-
-    return cursor.rowcount > 0
+        return cursor.rowcount > 0
 
 
 def delete_conversation(session_id: str) -> bool:
-    with _connect() as connection:
-        cursor = connection.execute(
-            "DELETE FROM conversations WHERE session_id = ?",
-            (session_id,)
-        )
-        connection.execute("DELETE FROM attachments WHERE session_id = ?", (session_id,))
-
-    return cursor.rowcount > 0
+    with _database().cursor() as cursor:
+        cursor.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
+        cursor.execute("DELETE FROM attachments WHERE session_id = ?", (session_id,))
+        cursor.execute("DELETE FROM conversations WHERE session_id = ?", (session_id,))
+        return cursor.rowcount > 0
 
 
 # ----------------------------------------------------------------------
 # Attached documents
 # ----------------------------------------------------------------------
 
+SUMMARY_COLUMNS = "attachment_id, name, size_bytes, pages, chars, truncated, created_at"
+
+
 def _attachment_summary(row):
     return {
-        "id": row["attachment_id"],
+        "id": int(row["attachment_id"]),
         "name": row["name"],
         "size_bytes": row["size_bytes"],
         "pages": row["pages"],
@@ -269,21 +233,19 @@ def _attachment_summary(row):
     }
 
 
-SUMMARY_COLUMNS = "attachment_id, name, size_bytes, pages, LENGTH(text) AS chars, truncated, created_at"
-
-
 def add_attachment(session_id: str, name: str, size_bytes: int, pages, text: str, truncated: bool):
-    with _connect() as connection:
-        cursor = connection.execute(
+    with _database().cursor() as cursor:
+        cursor.execute(
             """
-            INSERT INTO attachments (session_id, name, size_bytes, pages, text, truncated, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO attachments (session_id, name, size_bytes, pages, chars, text, truncated, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (session_id, name, size_bytes, pages, text, int(truncated), _now())
+            (session_id, name, size_bytes, pages, len(text), text, int(truncated), _now())
         )
-        row = connection.execute(
+        attachment_id = cursor.last_id()
+        row = cursor.execute(
             f"SELECT {SUMMARY_COLUMNS} FROM attachments WHERE attachment_id = ?",
-            (cursor.lastrowid,)
+            (attachment_id,)
         ).fetchone()
 
     return _attachment_summary(row)
@@ -292,8 +254,8 @@ def add_attachment(session_id: str, name: str, size_bytes: int, pages, text: str
 def list_attachments(session_id: str, ids=None):
     """Summaries of the documents of a conversation (optionally only these ids)."""
 
-    with _connect() as connection:
-        rows = connection.execute(
+    with _database().cursor() as cursor:
+        rows = cursor.execute(
             f"SELECT {SUMMARY_COLUMNS} FROM attachments WHERE session_id = ? ORDER BY attachment_id",
             (session_id,)
         ).fetchall()
@@ -308,8 +270,8 @@ def list_attachments(session_id: str, ids=None):
 def get_attachment_text(session_id: str, attachment_id: int):
     """(summary, text) of a document of this conversation, or None."""
 
-    with _connect() as connection:
-        row = connection.execute(
+    with _database().cursor() as cursor:
+        row = cursor.execute(
             f"SELECT {SUMMARY_COLUMNS}, text FROM attachments WHERE session_id = ? AND attachment_id = ?",
             (session_id, attachment_id)
         ).fetchone()
@@ -318,10 +280,9 @@ def get_attachment_text(session_id: str, attachment_id: int):
 
 
 def delete_attachment(session_id: str, attachment_id: int) -> bool:
-    with _connect() as connection:
-        cursor = connection.execute(
+    with _database().cursor() as cursor:
+        cursor.execute(
             "DELETE FROM attachments WHERE session_id = ? AND attachment_id = ?",
             (session_id, attachment_id)
         )
-
-    return cursor.rowcount > 0
+        return cursor.rowcount > 0

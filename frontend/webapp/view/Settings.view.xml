@@ -39,6 +39,14 @@
 						<Text text="{i18n>labelEndpoint}" class="cpRowLabel"/>
 						<Text text="{settings>/endpoint}" class="cpRowValue cpMono"/>
 					</HBox>
+					<HBox class="cpRow" renderType="Bare" visible="{= !!${settings>/status/chat_history} }">
+						<Text text="{i18n>labelHistory}" class="cpRowLabel"/>
+						<ObjectStatus
+							text="{settings>/status/chat_history/backend}"
+							state="{= ${settings>/status/chat_history/available} ? 'Success' : 'Error' }"
+							tooltip="{= ${settings>/status/chat_history/error} || ${settings>/status/chat_history/location} }"
+							inverted="true"/>
+					</HBox>
 					<HBox class="cpRow" renderType="Bare">
 						<Text text="{i18n>labelLastCheck}" class="cpRowLabel"/>
 						<Text text="{path: 'settings>/checkedAt', formatter: '.formatter.dateTime'}" class="cpRowValue"/>

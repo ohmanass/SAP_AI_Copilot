@@ -32,7 +32,7 @@ L'application fonctionne en local et se déploie sur **SAP BTP (Cloud Foundry)**
 - **Tableaux Fiori** sous la réponse pour les données SAP (commandes d'achat, commandes clients, factures fournisseurs et rapprochement à trois) : en-tête du document, postes, montants, dates, statuts colorés, jours de retard, blocages de paiement. Les tableaux sont construits par le backend à partir des résultats des outils, jamais à partir du texte du modèle. Un clic sur une ligne d'une liste ouvre l'analyse du document. Les colonnes secondaires sont masquées quand la place manque
 - **Export Excel** de chaque tableau (bouton dans son en-tête) : toutes les colonnes, y compris celles masquées à l'écran, avec des cellules typées (dates, nombres, montants dans leur devise, quantités et unités) et une feuille *Information* (système SAP, période, totaux, en-tête du document, date d'export). Le fichier `.xlsx` est généré dans le navigateur (`sap.ui.export`) et contient les lignes affichées
 - Page **Modules** : un espace de travail par module SAP, avec un statut réel (connecté, documentation, prévu), ses outils, sa documentation et ses suggestions
-- Historique persistant : nouvelle conversation, liste, reprise, renommage, suppression. Chaque conversation garde son module. Le contexte de l'agent est restauré après un redémarrage du backend
+- Historique persistant : nouvelle conversation, liste, reprise, renommage, suppression. Chaque conversation garde son module. Le contexte de l'agent est restauré après un redémarrage du backend. Stocké dans **SAP HANA Cloud** sur SAP BTP, dans SQLite en local
 - Page **Knowledge Base** : documents indexés, nombre de chunks indexés et attendus, statut d'indexation
 - Page **Settings** : statut en direct du backend, de l'IA (avec test de connexion), de la base vectorielle et des données SAP
 - Thème sombre bleu nuit basé sur `sap_horizon_dark`, responsive desktop et tablette
@@ -93,7 +93,7 @@ SAP_AI_Copilot/
 │   ├── rag/                # Découpage, indexation, recherche (ChromaDB)
 │   ├── attachments/        # Documents joints : extraction du texte (PDF, Word, Excel, texte) et lecture par l'agent
 │   ├── database/           # Schéma et jeu de données SQLite
-│   └── storage/            # Persistance de l'historique des conversations
+│   └── storage/            # Historique des conversations et documents joints (SQLite en local, SAP HANA Cloud sur BTP)
 ├── data/documents/         # Documentation indexée par le RAG
 ├── tests/                  # Tests pytest (rapprochement à trois, tableaux, connexion SAP)
 ├── deploy/
@@ -246,6 +246,7 @@ L'application s'ouvre sur `http://localhost:8080/index.html`. Le serveur de dév
 `python -m pytest` lance les tests du backend. Ils simulent toutes les réponses externes (S/4HANA, Destination service) : ils tournent hors ligne, sans clé ni identifiants, en moins d'une seconde. Ils couvrent :
 
 - le **rapprochement à trois** : chaque statut, retours et annulations d'entrées, avoirs, factures annulées, débits ultérieurs, tolérance de prix, solde GR/IR, numéros de poste au format différent selon l'API ;
+- l'**historique** : conversations, messages, documents joints, textes longs et unicode, migration des anciens fichiers SQLite, démarrage sans base disponible. Les mêmes tests tournent sur SAP HANA Cloud quand `HANA_TEST_KEY_FILE` désigne la clé d'un service `hana` (`cf service-key …`) ;
 - les **documents joints** : extraction PDF / Word / Excel / texte, fichiers refusés (type, taille, archive piégée), lecture par parties, cloisonnement entre conversations, API d'envoi et de suppression ;
 - les **tableaux de données** : colonnes sans valeur retirées, limite de lignes, unités de total, actions sur les lignes, dédoublonnage ;
 - la **connexion SAP** : mode direct, lecture de la destination (en-têtes d'authentification, `URL.headers.*`, `URL.queries.*`, cache et expiration des jetons, erreurs) et construction des requêtes OData.
@@ -264,6 +265,7 @@ sap-ai-copilot-backend     (Python, FastAPI)
    │  refuse tout appel sans jeton XSUAA valide (401), sauf /api/health
    ├── sap-ai-copilot-aicore  ─►  SAP Generative AI Hub
    ├── sap-ai-copilot-destination ─►  destination ─►  SAP S/4HANA Cloud (OData V2 et V4)
+   ├── sap-ai-copilot-hana    ─►  schéma SAP HANA Cloud : historique et documents joints
    └── ChromaDB               ─►  index RAG embarqué au déploiement
 ```
 
@@ -274,6 +276,7 @@ sap-ai-copilot-backend     (Python, FastAPI)
 | `sap-ai-copilot-xsuaa` | Service `xsuaa` / `application` | Authentification des utilisateurs |
 | `sap-ai-copilot-aicore` | Service user-provided | Identifiants SAP AI Core |
 | `sap-ai-copilot-destination` | Service `destination` / `lite` (gratuit) | Connexion au système S/4HANA |
+| `sap-ai-copilot-hana` | Service `hana` / `schema` (gratuit) | Schéma dans la base SAP HANA Cloud du sous-compte : historique des conversations et documents joints |
 
 ### Prérequis BTP
 
@@ -327,7 +330,7 @@ Supprime les deux applications (avec leurs routes) et les services `sap-ai-copil
 
 ### Points d'attention
 
-- **Historique des conversations et documents joints** : le disque d'une application Cloud Foundry est effacé à chaque redémarrage. Sur BTP, l'historique et les documents joints sont donc temporaires. Une base gérée (SAP HANA Cloud ou PostgreSQL) le rendrait persistant.
+- **Historique des conversations et documents joints** : stockés dans un schéma SAP HANA Cloud (`hana` / `schema`, gratuit) créé par `deploy.ps1` dans la base HANA Cloud existante du sous-compte. Ils survivent aux redémarrages et aux déploiements. Le schéma dépend de cette base : si elle est arrêtée (sandbox arrêtée la nuit, par exemple), le backend démarre quand même, répond aux questions sans l'historique et l'API d'historique renvoie 503 ; tout reprend dès que la base redémarre. La page **Settings** indique l'état de l'historique. `cleanup.ps1` supprime aussi ce schéma, donc tout l'historique.
 - **Secrets** : les identifiants SAP AI Core sont dans un service user-provided, lisible par les membres du space ayant le rôle Space Developer (`cf env`). Une liaison directe à une instance SAP AI Core est l'alternative à privilégier en production. La connexion S/4HANA passe déjà par le Destination service.
 - **Région** : le domaine `cfapps.eu10-005.hana.ondemand.com` est indiqué dans `deploy/manifest.yml` et `deploy/xs-security.json`. Il faut l'adapter pour une autre région.
 - **Pourquoi un jeton plutôt qu'une route interne** : rendre le backend accessible uniquement depuis l'Application Router via une règle réseau demande le droit `network.write`, rarement accordé aux développeurs. La validation du jeton XSUAA protège l'API de la même façon, sans droit particulier.
@@ -351,8 +354,7 @@ Les documents de `data/documents` servent de base documentaire au RAG.
 ## Pistes d'évolution
 
 - Import et ré-indexation de documents depuis l'interface
-- Historique persistant sur SAP BTP (SAP HANA Cloud ou PostgreSQL)
 
 ## Stack technique
 
-SAPUI5 1.136 · UI5 Tooling 4 · FastAPI · SAP Generative AI Hub · SAP AI SDK · SAP S/4HANA Cloud OData V2 et V4 · SAP BTP Cloud Foundry · Application Router · XSUAA · Destination service · ChromaDB · SQLite · Python 3.12
+SAPUI5 1.136 · UI5 Tooling 4 · FastAPI · SAP Generative AI Hub · SAP AI SDK · SAP S/4HANA Cloud OData V2 et V4 · SAP BTP Cloud Foundry · Application Router · XSUAA · Destination service · SAP HANA Cloud · ChromaDB · SQLite · Python 3.12

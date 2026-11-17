@@ -28,6 +28,7 @@ applications:
       - sap-ai-copilot-xsuaa
       - sap-ai-copilot-aicore
       - sap-ai-copilot-destination
+      - sap-ai-copilot-hana
 
   # Application Router: public URL, SAP login (XSUAA), serves the SAPUI5 app, proxies /api
   - name: sap-ai-copilot-approuter

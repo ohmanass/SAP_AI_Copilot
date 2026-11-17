@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app import auth, system_info
@@ -44,6 +44,21 @@ app.add_middleware(
 auth.install(app)
 
 chat_store.initialize()
+
+
+@app.exception_handler(chat_store.StoreUnavailable)
+def history_unavailable(request, error):
+    """History database down (e.g. SAP HANA Cloud stopped): clear answer instead of a 500."""
+    logger.warning("Chat history unavailable: %s", error)
+    return JSONResponse(status_code=503, content={"detail": f"Chat history temporarily unavailable. {error}"})
+
+
+def save_exchange_safely(**exchange):
+    """The answer is shown even if the history cannot be saved."""
+    try:
+        chat_store.save_exchange(**exchange)
+    except chat_store.StoreUnavailable as error:
+        logger.warning("Exchange not saved, chat history unavailable: %s", error)
 
 # One agent per conversation (rehydrated from chat history after a restart)
 agents = {}
@@ -87,7 +102,12 @@ def get_session(session_id: str, requested_module: str | None = None):
 
     with registry_lock:
         if session_id not in agents:
-            conversation = chat_store.get_conversation(session_id)
+            try:
+                conversation = chat_store.get_conversation(session_id)
+            except chat_store.StoreUnavailable as error:
+                # Answer without the previous messages rather than not at all
+                logger.warning("History of %s not restored: %s", session_id, error)
+                conversation = None
             module_key = conversation["module"] if conversation else requested_module
             agent = SAPAgent(module=get_module(module_key), session_id=session_id)
 
@@ -108,7 +128,11 @@ def message_attachments(session_id, request):
     """Summaries of the documents sent with a message (only this conversation's documents)."""
     if not request.attachments:
         return []
-    return chat_store.list_attachments(session_id, request.attachments)
+    try:
+        return chat_store.list_attachments(session_id, request.attachments)
+    except chat_store.StoreUnavailable as error:
+        logger.warning("Attached documents unavailable: %s", error)
+        return []
 
 
 @app.get("/api/health")
@@ -131,7 +155,7 @@ def chat(request: ChatRequest):
         with lock:
             result = agent.ask_with_details(request.message + attachment_reader.note(attachments))
 
-        chat_store.save_exchange(
+        save_exchange_safely(
             session_id=session_id,
             user_message=request.message,
             assistant_message=result["response"],
@@ -189,7 +213,7 @@ def chat_stream(request: ChatRequest):
                         yield event_line(event)
                         continue
 
-                    chat_store.save_exchange(
+                    save_exchange_safely(
                         session_id=session_id,
                         user_message=request.message,
                         assistant_message=event["response"],

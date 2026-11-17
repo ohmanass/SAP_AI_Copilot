@@ -12,7 +12,8 @@
                  deploy/build/approuter  (approuter + SAPUI5 build, UI5 from the SAP CDN)
       2. Services: sap-ai-copilot-xsuaa (xsuaa/application),
                    sap-ai-copilot-aicore (user-provided),
-                   sap-ai-copilot-destination (destination/lite, free)
+                   sap-ai-copilot-destination (destination/lite, free),
+                   sap-ai-copilot-hana (hana/schema, free: chat history in SAP HANA Cloud)
          The SAP S/4HANA system is read from a BTP destination:
            - BTP_S4_DESTINATION in .env: name of an existing subaccount destination
              (e.g. a real S/4HANA system), used as is;
@@ -44,6 +45,7 @@ $Approuter = "sap-ai-copilot-approuter"
 $Xsuaa     = "sap-ai-copilot-xsuaa"
 $AiCore    = "sap-ai-copilot-aicore"
 $Destination = "sap-ai-copilot-destination"
+$Hana      = "sap-ai-copilot-hana"
 $LegacyS4  = "sap-ai-copilot-s4"     # user-provided service of the first versions, replaced by the destination
 
 function Step($text) { Write-Host "`n==> $text" -ForegroundColor Cyan }
@@ -298,6 +300,16 @@ try {
     Remove-Item $file -Force -ErrorAction SilentlyContinue
 }
 Wait-Service $Destination
+
+Step "Service $Hana (hana/schema)"
+# Schema on the SAP HANA Cloud database of the subaccount: the chat history survives
+# restarts and deployments. Created once, never updated (it holds the data).
+if (-not (Test-ServiceExists $Hana)) {
+    Invoke-Native "cf create-service $Hana" { cf create-service hana schema $Hana }
+    Wait-Service $Hana
+} else {
+    Write-Host "   already exists"
+}
 
 # ---------------------------------------------------------------------------
 # 4. Applications

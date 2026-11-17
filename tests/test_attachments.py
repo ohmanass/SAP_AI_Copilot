@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.attachments import extract, reader
 from app.attachments.extract import ExtractionError, extract_text
-from app.storage import chat_store
+from app.storage import chat_store, database
 
 SESSION = "test-session-0001"
 
@@ -146,10 +146,13 @@ def test_long_text_is_truncated(monkeypatch):
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def chat_db(tmp_path, monkeypatch):
-    monkeypatch.setattr(chat_store, "CHAT_DB_PATH", tmp_path / "chat_history.db")
+def chat_db(tmp_path):
+    database.set_database(database.SQLiteDatabase(tmp_path / "chat_history.db"))
+    chat_store.reset()
     chat_store.initialize()
-    return chat_store
+    yield chat_store
+    database.set_database(None)
+    chat_store.reset()
 
 
 def test_note_lists_documents():

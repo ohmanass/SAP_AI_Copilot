@@ -16,6 +16,7 @@ from app.database.connection import DB_PATH, get_connection
 from app.rag.document_loader import DOCUMENTS_PATH, split_text
 from app.rag.vector_store import CHROMA_PATH
 from app.sap_data import get_data_source
+from app.storage import chat_store
 
 load_dotenv()
 
@@ -257,5 +258,6 @@ def get_system_status(check_ai: bool = False):
         "ai": ai,
         "vector_store": _vector_store_status(),
         "sap_data": get_data_source().status(),
-        "sap_database": _sap_database_status()
+        "sap_database": _sap_database_status(),
+        "chat_history": chat_store.describe()
     }
