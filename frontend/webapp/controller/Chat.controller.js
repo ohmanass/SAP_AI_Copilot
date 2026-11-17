@@ -18,8 +18,36 @@ sap.ui.define([
 		get_supplier_invoice: "sap-icon://receipt",
 		search_supplier_invoices: "sap-icon://money-bills",
 		match_purchase_order_invoices: "sap-icon://compare",
-		search_sap_documentation: "sap-icon://course-book"
+		search_sap_documentation: "sap-icon://course-book",
+		read_attached_document: "sap-icon://attachment-text-file"
 	};
+
+	// Attached documents: same limits as the backend (app/attachments/extract.py)
+	const ATTACHMENT_EXTENSIONS = [
+		".pdf", ".docx", ".xlsx", ".txt", ".md", ".csv", ".tsv", ".json", ".xml", ".log",
+		".sql", ".abap", ".yaml", ".yml", ".html", ".htm"
+	];
+	const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+	const ATTACHMENT_ICONS = {
+		".pdf": "sap-icon://pdf-attachment",
+		".docx": "sap-icon://doc-attachment",
+		".xlsx": "sap-icon://excel-attachment",
+		".csv": "sap-icon://excel-attachment",
+		".tsv": "sap-icon://excel-attachment"
+	};
+
+	const extensionOf = (name) => {
+		const match = /\.[^.]+$/.exec(name || "");
+		return match ? match[0].toLowerCase() : "";
+	};
+
+	/** Random UUID (conversation created in the browser, local ids of uploads). */
+	const newId = () => (window.crypto && window.crypto.randomUUID
+		? window.crypto.randomUUID()
+		: "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+			const r = Math.floor(Math.random() * 16);
+			return (c === "x" ? r : (r % 4) + 8).toString(16);
+		}));
 
 	const TITLE_MAX_LENGTH = 60;
 
@@ -39,6 +67,11 @@ sap.ui.define([
 				activity: "",
 				loading: false,
 				draft: "",
+				// Documents attached to the next message, and the id of the conversation
+				// they belong to while it does not exist yet (new chat)
+				attachments: [],
+				uploading: false,
+				draftSessionId: null,
 				// Module workspace (null = general assistant)
 				module: null,
 				moduleInfo: null,
@@ -155,6 +188,7 @@ sap.ui.define([
 			this._detachStream();
 			const chat = this._chat();
 			this._applyModule(moduleKey);
+			this._resetAttachments();
 			chat.setProperty("/sessionId", null);
 			chat.setProperty("/title", this.getText("newConversationTitle"));
 			chat.setProperty("/messages", []);
@@ -169,6 +203,7 @@ sap.ui.define([
 			this._detachStream();
 			const chat = this._chat();
 
+			this._resetAttachments();
 			chat.setProperty("/sessionId", sessionId);
 			chat.setProperty("/title", "");
 			chat.setProperty("/messages", []);
@@ -217,7 +252,11 @@ sap.ui.define([
 		onSend() {
 			const input = this.byId("input");
 			const domRef = input.getFocusDomRef();
-			const text = (domRef ? domRef.value : input.getValue()).trim();
+			let text = (domRef ? domRef.value : input.getValue()).trim();
+			const ready = this._readyAttachments().length;
+			if (!text && ready) {
+				text = this.getText(ready > 1 ? "attachmentDefaultPromptMany" : "attachmentDefaultPrompt");
+			}
 			this._send(text);
 		},
 
@@ -236,7 +275,7 @@ sap.ui.define([
 
 			// Remove the failed user message and its error, then send again
 			this._chat().setProperty("/messages", messages.filter((m, i) => i !== index && i !== index - 1));
-			this._send(failed.failedText);
+			this._send(failed.failedText, failed.failedAttachments);
 		},
 
 		onSendOrStop() {
@@ -265,17 +304,22 @@ sap.ui.define([
 		 * when the backend does not provide it). Events update the UI live:
 		 * tool activity, then the answer text revealed progressively.
 		 */
-		async _send(text) {
+		async _send(text, attachmentsOverride) {
 			const chat = this._chat();
 
-			if (!text || chat.getProperty("/busy") || chat.getProperty("/loading")) {
+			if (!text || chat.getProperty("/busy") || chat.getProperty("/loading") || chat.getProperty("/uploading")) {
 				return;
 			}
+
+			// Documents sent with this message (ready uploads, or the ones of a retried message)
+			const attachments = attachmentsOverride || this._readyAttachments();
 
 			const stream = {
 				key: this._conversationKey,
 				text,
 				sessionId: chat.getProperty("/sessionId"),
+				// Id sent to the backend: a new chat with documents already has one
+				requestSessionId: chat.getProperty("/sessionId") || chat.getProperty("/draftSessionId"),
 				module: chat.getProperty("/module"),
 				index: -1,
 				received: "",
@@ -285,8 +329,9 @@ sap.ui.define([
 			this._stream = stream;
 			this._abortController = new AbortController();
 
-			this._append({ role: "user", content: text });
+			this._append({ role: "user", content: text, attachments });
 			chat.setProperty("/draft", "");
+			chat.setProperty("/attachments", []);
 			chat.setProperty("/busy", true);
 			chat.setProperty("/pending", true);
 			chat.setProperty("/activity", this.getText("thinking"));
@@ -296,14 +341,17 @@ sap.ui.define([
 			try {
 				try {
 					await this.getService().chatStream(
-						text, stream.sessionId, onEvent, this._abortController.signal, stream.module
+						text, stream.requestSessionId, onEvent, this._abortController.signal, stream.module,
+						attachments.map((a) => a.id)
 					);
 				} catch (error) {
 					if (error.kind !== "http" || ![404, 405].includes(error.status)) {
 						throw error;
 					}
 					// Older backend without /api/chat/stream
-					const result = await this.getService().chat(text, stream.sessionId, stream.module);
+					const result = await this.getService().chat(
+						text, stream.requestSessionId, stream.module, attachments.map((a) => a.id)
+					);
 					onEvent({ type: "token", content: result.response });
 					onEvent(Object.assign({ type: "done" }, result));
 				}
@@ -322,7 +370,7 @@ sap.ui.define([
 					if (stream.index >= 0) {
 						this._chat().setProperty(`/messages/${stream.index}/streaming`, false);
 					}
-					this._append(this._errorMessage(this.describeError(error), text));
+					this._append(this._errorMessage(this.describeError(error), text, attachments));
 					this._endBusy();
 				}
 			} finally {
@@ -430,6 +478,7 @@ sap.ui.define([
 			}));
 
 			if (!stream.sessionId) {
+				chat.setProperty("/draftSessionId", null);
 				chat.setProperty("/sessionId", done.session_id);
 				chat.setProperty("/title", this._buildTitle(stream.text));
 				this.getModel("app").setProperty("/activeSessionId", done.session_id);
@@ -546,6 +595,7 @@ sap.ui.define([
 				tools: [],
 				sources: [],
 				tables: [],
+				attachments: [],
 				html: "",
 				streaming: false,
 				stopped: false,
@@ -566,6 +616,7 @@ sap.ui.define([
 					icon: TOOL_ICONS[name] || "sap-icon://wrench"
 				})),
 				tables: raw.tables || [],
+				attachments: raw.attachments || [],
 				sources: (raw.sources || []).map((source) => Object.assign({}, source, {
 					label: source.chunk === null || source.chunk === undefined
 						? source.source
@@ -574,8 +625,128 @@ sap.ui.define([
 			});
 		},
 
-		_errorMessage(text, failedText) {
-			return this._normalise({ role: "error", content: text, failedText: failedText || "" });
+		_errorMessage(text, failedText, failedAttachments) {
+			return this._normalise({
+				role: "error", content: text, failedText: failedText || "", failedAttachments: failedAttachments || []
+			});
+		},
+
+		/* ======================= Attached documents ======================= */
+
+		/** "+" button: opens the browser file picker. */
+		onAttach() {
+			const picker = document.createElement("input");
+			picker.type = "file";
+			picker.multiple = true;
+			picker.accept = ATTACHMENT_EXTENSIONS.join(",");
+			picker.addEventListener("change", () => this._uploadFiles(Array.from(picker.files || [])));
+			picker.click();
+		},
+
+		async _uploadFiles(files) {
+			const chat = this._chat();
+			const key = this._conversationKey;
+			let sessionId = chat.getProperty("/sessionId") || chat.getProperty("/draftSessionId");
+			if (!sessionId) {
+				sessionId = newId();
+				chat.setProperty("/draftSessionId", sessionId);
+			}
+
+			const uploads = files.filter((file) => {
+				if (!ATTACHMENT_EXTENSIONS.includes(extensionOf(file.name))) {
+					MessageToast.show(this.getText("attachmentUnsupported", [file.name]));
+					return false;
+				}
+				if (file.size > ATTACHMENT_MAX_BYTES) {
+					MessageToast.show(this.getText("attachmentTooLarge", [file.name]));
+					return false;
+				}
+				return true;
+			}).map((file) => {
+				const entry = { localId: newId(), name: file.name, uploading: true };
+				chat.setProperty("/attachments", chat.getProperty("/attachments").concat(entry));
+				return { file, entry };
+			});
+			this._updateUploading();
+
+			await Promise.all(uploads.map(async ({ file, entry }) => {
+				try {
+					const summary = await this.getService().uploadAttachment(sessionId, file);
+					if (key !== this._conversationKey) {
+						// The user left this conversation meanwhile: do not keep an orphan document
+						this.getService().deleteAttachment(sessionId, summary.id).catch(() => null);
+						return;
+					}
+					this._replaceAttachment(entry.localId, Object.assign(summary, { localId: entry.localId, uploading: false }));
+				} catch (error) {
+					if (key !== this._conversationKey) {
+						return;
+					}
+					this._replaceAttachment(entry.localId, null);
+					MessageToast.show(this.getText("attachmentFailed", [file.name, error.detail || this.describeError(error)]));
+				}
+			}));
+			if (key === this._conversationKey) {
+				this._updateUploading();
+				this._focusInput();
+			}
+		},
+
+		onRemoveAttachment(event) {
+			const attachment = event.getSource().getBindingContext("chat").getObject();
+			this._replaceAttachment(attachment.localId, null);
+			const chat = this._chat();
+			const sessionId = chat.getProperty("/sessionId") || chat.getProperty("/draftSessionId");
+			if (attachment.id && sessionId) {
+				this.getService().deleteAttachment(sessionId, attachment.id).catch(() => null);
+			}
+			this._updateUploading();
+		},
+
+		_replaceAttachment(localId, replacement) {
+			const chat = this._chat();
+			const list = chat.getProperty("/attachments")
+				.map((a) => (a.localId === localId ? replacement : a))
+				.filter(Boolean);
+			chat.setProperty("/attachments", list);
+		},
+
+		_readyAttachments() {
+			return this._chat().getProperty("/attachments").filter((a) => !a.uploading && a.id);
+		},
+
+		_updateUploading() {
+			const chat = this._chat();
+			chat.setProperty("/uploading", chat.getProperty("/attachments").some((a) => a.uploading));
+		},
+
+		/** Leaving a conversation: documents not sent yet are discarded (also on the server). */
+		_resetAttachments() {
+			const chat = this._chat();
+			const sessionId = chat.getProperty("/sessionId") || chat.getProperty("/draftSessionId");
+			chat.getProperty("/attachments").forEach((a) => {
+				if (a.id && sessionId) {
+					this.getService().deleteAttachment(sessionId, a.id).catch(() => null);
+				}
+			});
+			chat.setProperty("/attachments", []);
+			chat.setProperty("/uploading", false);
+			chat.setProperty("/draftSessionId", null);
+		},
+
+		formatAttachmentIcon(name) {
+			return ATTACHMENT_ICONS[extensionOf(name)] || "sap-icon://document-text";
+		},
+
+		formatAttachmentMeta(pages, chars) {
+			const parts = [];
+			if (pages) {
+				parts.push(this.getText(pages === 1 ? "attachmentPage" : "attachmentPages", [pages]));
+			}
+			if (typeof chars === "number") {
+				parts.push(this.getText("attachmentChars", [new Intl.NumberFormat().format(chars)]));
+			}
+			return parts.join(" · ");
 		},
 
 		_toolLabel(name) {

@@ -37,6 +37,22 @@ CREATE TABLE IF NOT EXISTS messages (
 
 CREATE INDEX IF NOT EXISTS idx_messages_session
     ON messages(session_id, message_id);
+
+-- Documents attached to a conversation. No foreign key: a document can be
+-- uploaded before the first message creates the conversation.
+CREATE TABLE IF NOT EXISTS attachments (
+    attachment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    pages INTEGER,
+    text TEXT NOT NULL,
+    truncated INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_attachments_session
+    ON attachments(session_id, attachment_id);
 """
 
 TITLE_MAX_LENGTH = 60
@@ -80,6 +96,10 @@ def initialize():
         if "tables" not in columns:
             connection.execute("ALTER TABLE messages ADD COLUMN tables TEXT NOT NULL DEFAULT '[]'")
 
+        # Additive migration: documents sent with a user message (JSON list of summaries)
+        if "attachments" not in columns:
+            connection.execute("ALTER TABLE messages ADD COLUMN attachments TEXT NOT NULL DEFAULT '[]'")
+
 
 def build_title(message: str) -> str:
     title = " ".join(message.split())
@@ -107,7 +127,8 @@ def save_exchange(
     sources: list,
     tools_used: list,
     module: str | None = None,
-    tables: list | None = None
+    tables: list | None = None,
+    attachments: list | None = None
 ):
     """Store one user/assistant exchange, creating the conversation if needed."""
 
@@ -126,11 +147,12 @@ def save_exchange(
         connection.executemany(
             """
             INSERT INTO messages
-                (session_id, role, content, sources, tools_used, tables, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (session_id, role, content, sources, tools_used, tables, attachments, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
-                (session_id, "user", user_message, "[]", "[]", "[]", now),
+                (session_id, "user", user_message, "[]", "[]", "[]",
+                 json.dumps(attachments or [], ensure_ascii=False), now),
                 (
                     session_id,
                     "assistant",
@@ -138,6 +160,7 @@ def save_exchange(
                     json.dumps(sources, ensure_ascii=False),
                     json.dumps(tools_used, ensure_ascii=False),
                     json.dumps(tables or [], ensure_ascii=False),
+                    "[]",
                     now
                 )
             ]
@@ -182,7 +205,7 @@ def get_conversation(session_id: str):
 
         rows = connection.execute(
             """
-            SELECT role, content, sources, tools_used, tables, created_at
+            SELECT role, content, sources, tools_used, tables, attachments, created_at
             FROM messages
             WHERE session_id = ?
             ORDER BY message_id ASC
@@ -198,6 +221,7 @@ def get_conversation(session_id: str):
             "sources": json.loads(row["sources"]),
             "tools_used": json.loads(row["tools_used"]),
             "tables": json.loads(row["tables"]),
+            "attachments": json.loads(row["attachments"]),
             "created_at": row["created_at"]
         }
         for row in rows
@@ -223,6 +247,81 @@ def delete_conversation(session_id: str) -> bool:
         cursor = connection.execute(
             "DELETE FROM conversations WHERE session_id = ?",
             (session_id,)
+        )
+        connection.execute("DELETE FROM attachments WHERE session_id = ?", (session_id,))
+
+    return cursor.rowcount > 0
+
+
+# ----------------------------------------------------------------------
+# Attached documents
+# ----------------------------------------------------------------------
+
+def _attachment_summary(row):
+    return {
+        "id": row["attachment_id"],
+        "name": row["name"],
+        "size_bytes": row["size_bytes"],
+        "pages": row["pages"],
+        "chars": row["chars"],
+        "truncated": bool(row["truncated"]),
+        "created_at": row["created_at"]
+    }
+
+
+SUMMARY_COLUMNS = "attachment_id, name, size_bytes, pages, LENGTH(text) AS chars, truncated, created_at"
+
+
+def add_attachment(session_id: str, name: str, size_bytes: int, pages, text: str, truncated: bool):
+    with _connect() as connection:
+        cursor = connection.execute(
+            """
+            INSERT INTO attachments (session_id, name, size_bytes, pages, text, truncated, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (session_id, name, size_bytes, pages, text, int(truncated), _now())
+        )
+        row = connection.execute(
+            f"SELECT {SUMMARY_COLUMNS} FROM attachments WHERE attachment_id = ?",
+            (cursor.lastrowid,)
+        ).fetchone()
+
+    return _attachment_summary(row)
+
+
+def list_attachments(session_id: str, ids=None):
+    """Summaries of the documents of a conversation (optionally only these ids)."""
+
+    with _connect() as connection:
+        rows = connection.execute(
+            f"SELECT {SUMMARY_COLUMNS} FROM attachments WHERE session_id = ? ORDER BY attachment_id",
+            (session_id,)
+        ).fetchall()
+
+    summaries = [_attachment_summary(row) for row in rows]
+    if ids is not None:
+        wanted = set(ids)
+        summaries = [s for s in summaries if s["id"] in wanted]
+    return summaries
+
+
+def get_attachment_text(session_id: str, attachment_id: int):
+    """(summary, text) of a document of this conversation, or None."""
+
+    with _connect() as connection:
+        row = connection.execute(
+            f"SELECT {SUMMARY_COLUMNS}, text FROM attachments WHERE session_id = ? AND attachment_id = ?",
+            (session_id, attachment_id)
+        ).fetchone()
+
+    return (_attachment_summary(row), row["text"]) if row else None
+
+
+def delete_attachment(session_id: str, attachment_id: int) -> bool:
+    with _connect() as connection:
+        cursor = connection.execute(
+            "DELETE FROM attachments WHERE session_id = ? AND attachment_id = ?",
+            (session_id, attachment_id)
         )
 
     return cursor.rowcount > 0

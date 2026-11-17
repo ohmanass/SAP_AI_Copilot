@@ -1141,6 +1141,115 @@ html, body.cpBody {
 	transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+/* ---------- Attached documents ---------- */
+.cpComposer {
+	padding-left: 0.4375rem;
+}
+
+.cpAttachBtn.sapMBtn {
+	flex: none;
+	align-self: flex-end;
+}
+
+.cpAttachBtn .sapMBtnInner {
+	width: 2.5rem;
+	height: 2.5rem;
+	border: none;
+	border-radius: 12px;
+	background: transparent;
+}
+
+.cpAttachBtn .sapMBtnInner:hover {
+	background: var(--cp-surface-2);
+}
+
+.cpAttachBtn .sapMBtnIcon {
+	font-size: 1.125rem;
+	color: var(--cp-text-2);
+}
+
+.cpAttachBtn:hover .sapMBtnIcon {
+	color: var(--cp-text);
+}
+
+.cpPendingAttachments {
+	display: flex;
+	gap: 0.5rem;
+	width: 100%;
+	max-width: 52rem;
+	box-sizing: border-box;
+	margin: 0 auto 0.5rem;
+	align-self: center;
+}
+
+.cpMsgAttachments {
+	display: flex;
+	gap: 0.5rem;
+	margin-top: 0.5rem;
+}
+
+.cpMessage[data-role="user"] .cpMsgAttachments {
+	justify-content: flex-end;
+}
+
+.cpAttachment {
+	display: flex;
+	gap: 0.625rem;
+	max-width: 17rem;
+	min-width: 0;
+	padding: 0.4375rem 0.5rem 0.4375rem 0.625rem;
+	border: 1px solid var(--cp-border-strong);
+	border-radius: 12px;
+	background: var(--cp-surface);
+}
+
+.cpAttachment[data-state="uploading"] {
+	opacity: 0.75;
+}
+
+.cpAttachmentIcon.sapUiIcon,
+.cpAttachmentBusy {
+	flex: none;
+	width: 2rem;
+	height: 2rem;
+	line-height: 2rem;
+	border-radius: 8px;
+	background: rgba(59, 130, 246, 0.12);
+	font-size: 1rem;
+	text-align: center;
+	color: #60a5fa;
+}
+
+.cpAttachmentText {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.cpAttachmentName.sapMText {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-size: 0.8125rem;
+	font-weight: 600;
+	color: var(--cp-text);
+}
+
+.cpAttachmentMeta.sapMText {
+	font-size: 0.6875rem;
+	color: var(--cp-muted);
+}
+
+.cpAttachmentRemove.sapMBtn {
+	flex: none;
+	height: auto;
+}
+
+.cpAttachmentRemove .sapMBtnIcon {
+	font-size: 0.75rem;
+	color: var(--cp-muted);
+}
+
 .cpComposer:focus-within {
 	border-color: rgba(59, 130, 246, 0.6);
 	box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15), var(--cp-shadow);

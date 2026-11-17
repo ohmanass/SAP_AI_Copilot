@@ -6,3 +6,5 @@ fastapi
 uvicorn[standard]
 httpx
 sap-xssec
+pypdf
+python-multipart

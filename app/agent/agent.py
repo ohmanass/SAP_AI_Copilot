@@ -1,5 +1,6 @@
 import json
 
+from app.attachments import reader as attachment_reader
 from app.agent.data_tables import collect_table
 from app.llm.llm_client import LLMClient
 from app.tools.sap_data_tools import (
@@ -326,16 +327,20 @@ MAX_ROUNDS_MESSAGE = "Maximum number of tool-calling rounds reached."
 
 class SAPAgent:
 
-    def __init__(self, module=None):
+    def __init__(self, module=None, session_id=None):
 
         self.llm = LLMClient()
 
-        # Optional module workspace (app.modules.Module): restricts tools and documents
+        # Conversation the agent belongs to: scopes the attached documents it can read
+        self.session_id = session_id
+
+        # Optional module workspace (app.modules.Module): restricts tools and documents.
+        # Attached documents can be read in every workspace.
         self.module = module
         self.tools = (
             [tool for tool in TOOLS if tool["function"]["name"] in module.tools]
-            if module else TOOLS
-        )
+            if module else list(TOOLS)
+        ) + [attachment_reader.TOOL]
 
         self.messages = [
             {
@@ -433,8 +438,10 @@ class SAPAgent:
             }
         ]
 
+        self.messages[0]["content"] += attachment_reader.PROMPT
+
         if module:
-            available = ", ".join(module.tools)
+            available = ", ".join(module.tools + (attachment_reader.TOOL["function"]["name"],))
             self.messages[0]["content"] += (
                 f"\n\nWORKSPACE: SAP {module.code} - {module.name}.\n"
                 f"{module.instructions}\n"
@@ -443,6 +450,12 @@ class SAPAgent:
             )
 
     def execute_tool(self, tool_name, arguments):
+
+        # Attached documents: always bound to this agent's conversation, never another one
+        if tool_name == attachment_reader.TOOL["function"]["name"]:
+            return attachment_reader.read(
+                self.session_id, arguments.get("document_id"), arguments.get("part", 1)
+            )
 
         if tool_name not in TOOL_REGISTRY:
             raise ValueError(f"Unknown tool: {tool_name}")
@@ -468,9 +481,12 @@ class SAPAgent:
 
         for entry in history:
             if entry.get("role") in ("user", "assistant") and entry.get("content"):
+                content = entry["content"]
+                if entry["role"] == "user":
+                    content += attachment_reader.note(entry.get("attachments"))
                 self.messages.append({
                     "role": entry["role"],
-                    "content": entry["content"]
+                    "content": content
                 })
 
     def ask(self, user_input):

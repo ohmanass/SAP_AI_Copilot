@@ -91,6 +91,18 @@
 
 										<Text text="{chat>content}" renderWhitespace="true" class="cpUserBubble" visible="{= ${chat>role} === 'user' }"/>
 
+										<!-- Documents sent with a user message -->
+										<HBox class="cpMsgAttachments" wrap="Wrap" renderType="Bare" visible="{= ${chat>attachments}.length > 0 }"
+											items="{path: 'chat>attachments', templateShareable: false}">
+											<HBox class="cpAttachment" alignItems="Center" renderType="Bare">
+												<core:Icon src="{path: 'chat>name', formatter: '.formatAttachmentIcon'}" class="cpAttachmentIcon"/>
+												<VBox renderType="Bare" class="cpAttachmentText">
+													<Text text="{chat>name}" wrapping="false" class="cpAttachmentName" tooltip="{chat>name}"/>
+													<Text text="{parts: ['chat>pages', 'chat>chars'], formatter: '.formatAttachmentMeta'}" class="cpAttachmentMeta"/>
+												</VBox>
+											</HBox>
+										</HBox>
+
 										<core:HTML content="{chat>html}" sanitizeContent="true" preferDOM="false" visible="{= ${chat>role} === 'assistant' &amp;&amp; !!${chat>html} }"/>
 
 										<!-- SAP data read by the tools (built by the backend, see util/DataTable.js) -->
@@ -168,7 +180,44 @@
 
 				<!-- ============ Composer ============ -->
 				<VBox class="cpComposerWrap" renderType="Bare">
+					<!-- Documents attached to the next message -->
+					<HBox class="cpPendingAttachments" wrap="Wrap" renderType="Bare" visible="{= ${chat>/attachments}.length > 0 }"
+						items="{path: 'chat>/attachments', templateShareable: false}">
+						<HBox class="cpAttachment" alignItems="Center" renderType="Bare">
+							<customData>
+								<core:CustomData key="state" value="{= ${chat>uploading} ? 'uploading' : 'ready' }" writeToDom="true"/>
+							</customData>
+							<BusyIndicator size="1rem" visible="{chat>uploading}" class="cpAttachmentBusy"/>
+							<core:Icon src="{path: 'chat>name', formatter: '.formatAttachmentIcon'}" class="cpAttachmentIcon" visible="{= !${chat>uploading} }"/>
+							<VBox renderType="Bare" class="cpAttachmentText">
+								<Text text="{chat>name}" wrapping="false" class="cpAttachmentName" tooltip="{chat>name}"/>
+								<Text
+									text="{i18n>attachmentUploading}"
+									visible="{chat>uploading}"
+									class="cpAttachmentMeta"/>
+								<Text
+									text="{parts: ['chat>pages', 'chat>chars'], formatter: '.formatAttachmentMeta'}"
+									visible="{= !${chat>uploading} }"
+									class="cpAttachmentMeta"/>
+							</VBox>
+							<Button
+								icon="sap-icon://decline"
+								type="Transparent"
+								class="cpAttachmentRemove"
+								tooltip="{i18n>attachmentRemove}"
+								enabled="{= !${chat>/busy} }"
+								press=".onRemoveAttachment"/>
+						</HBox>
+					</HBox>
 					<HBox class="cpComposer" alignItems="End" renderType="Bare">
+						<Button
+							id="attachButton"
+							icon="sap-icon://add"
+							type="Transparent"
+							class="cpAttachBtn"
+							tooltip="{i18n>attach}"
+							enabled="{= !${chat>/busy} &amp;&amp; !${chat>/loading} }"
+							press=".onAttach"/>
 						<TextArea
 							id="input"
 							class="cpInput"
@@ -186,7 +235,7 @@
 							type="Emphasized"
 							class="cpSend"
 							tooltip="{= ${chat>/busy} ? ${i18n>stop} : ${i18n>send} }"
-							enabled="{= ${chat>/busy} || (!${chat>/loading} &amp;&amp; !!${chat>/draft}) }"
+							enabled="{= ${chat>/busy} || (!${chat>/loading} &amp;&amp; !${chat>/uploading} &amp;&amp; (!!${chat>/draft} || ${chat>/attachments}.length > 0)) }"
 							press=".onSendOrStop">
 							<customData>
 								<core:CustomData key="busy" value="{= ${chat>/busy} ? 'true' : 'false' }" writeToDom="true"/>

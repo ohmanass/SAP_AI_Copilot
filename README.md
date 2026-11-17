@@ -11,11 +11,13 @@ L'application fonctionne en local et se déploie sur **SAP BTP (Cloud Foundry)**
 ### Agent IA
 
 - GPT-4o-mini via SAP Generative AI Hub (SDK `sap-ai-sdk-gen`)
-- Tool Calling avec dix outils :
+- Tool Calling avec onze outils :
   - **Achats (MM)** : consultation d'une commande d'achat (postes, échéances, quantités ouvertes), analyse des retards de livraison, recherche par fournisseur ou par date
   - **Ventes (SD)** : consultation d'une commande client (client, statuts, postes, dates confirmées), recherche par client ou par date, commandes clients en retard de livraison
   - **Finance (FI)** : consultation d'une facture fournisseur (montants, conditions de paiement, blocage de paiement, postes facturés), recherche par fournisseur, par date ou des factures bloquées au paiement, **rapprochement à trois** d'une commande d'achat (commandé / reçu / facturé, poste par poste, avec écarts de quantité et de prix et solde GR/IR)
   - **Documentation** : recherche RAG dans la documentation du module (MM, SD, FI ou ABAP)
+  - **Documents joints** : lecture des documents ajoutés à la conversation, partie par partie
+- **Documents joints** : bouton **+** dans la zone de saisie pour joindre des PDF, Word (`.docx`), Excel (`.xlsx`) et fichiers texte (`.txt`, `.md`, `.csv`, `.json`, `.xml`…), 10 Mo par fichier. L'agent les lit, les résume et les croise avec les données SAP (par exemple une facture PDF comparée au rapprochement à trois de la commande qu'elle cite). Seul le texte extrait est conservé, avec la conversation ; le contenu d'un document est traité comme une donnée, jamais comme une instruction
 - Données transactionnelles lues dans **SAP S/4HANA Cloud** via les API officielles `API_PURCHASEORDER_2` et `API_SALESORDER` (OData V4), `API_SUPPLIERINVOICE_PROCESS_SRV`, `API_MATERIAL_DOCUMENT_SRV` et `API_BUSINESS_PARTNER` (OData V2), ou dans une base SQLite de démonstration (achats uniquement) utilisable hors ligne
 - **Espaces de travail par module** (MM, SD, FI, ABAP) : l'agent n'utilise que les outils et la documentation du module choisi
 - RAG sur ChromaDB avec les embeddings `text-embedding-3-large`
@@ -89,6 +91,7 @@ SAP_AI_Copilot/
 │   ├── tools/              # Outils appelés par l'agent
 │   ├── sap_data/           # Sources de données SAP : client OData S/4HANA (achats, ventes, factures), SQLite
 │   ├── rag/                # Découpage, indexation, recherche (ChromaDB)
+│   ├── attachments/        # Documents joints : extraction du texte (PDF, Word, Excel, texte) et lecture par l'agent
 │   ├── database/           # Schéma et jeu de données SQLite
 │   └── storage/            # Persistance de l'historique des conversations
 ├── data/documents/         # Documentation indexée par le RAG
@@ -121,7 +124,10 @@ SAP_AI_Copilot/
 | `POST` | `/api/chat/stream` | Même requête, réponse en flux NDJSON : `session`, `tool_start`, `tool_end`, `token`, `done` (avec `tables`), `error` |
 | `GET` | `/api/sessions` | Liste des conversations |
 | `GET` | `/api/sessions/{id}` | Messages d'une conversation |
-| `DELETE` | `/api/sessions/{id}` | Supprime une conversation |
+| `DELETE` | `/api/sessions/{id}` | Supprime une conversation (et ses documents joints) |
+| `POST` | `/api/sessions/{id}/attachments` | Joint un document (multipart, champ `file`) ; la conversation peut ne pas encore exister. Renvoie l'`id`, le nom, le nombre de pages et de caractères |
+| `GET` | `/api/sessions/{id}/attachments` | Documents joints à une conversation |
+| `DELETE` | `/api/sessions/{id}/attachments/{attachment_id}` | Retire un document joint |
 | `GET` | `/api/knowledge-base` | Documents, chunks indexés et statut |
 | `GET` | `/api/status?check_ai=true` | Statut du backend, de l'IA, de ChromaDB et de SQLite |
 
@@ -240,6 +246,7 @@ L'application s'ouvre sur `http://localhost:8080/index.html`. Le serveur de dév
 `python -m pytest` lance les tests du backend. Ils simulent toutes les réponses externes (S/4HANA, Destination service) : ils tournent hors ligne, sans clé ni identifiants, en moins d'une seconde. Ils couvrent :
 
 - le **rapprochement à trois** : chaque statut, retours et annulations d'entrées, avoirs, factures annulées, débits ultérieurs, tolérance de prix, solde GR/IR, numéros de poste au format différent selon l'API ;
+- les **documents joints** : extraction PDF / Word / Excel / texte, fichiers refusés (type, taille, archive piégée), lecture par parties, cloisonnement entre conversations, API d'envoi et de suppression ;
 - les **tableaux de données** : colonnes sans valeur retirées, limite de lignes, unités de total, actions sur les lignes, dédoublonnage ;
 - la **connexion SAP** : mode direct, lecture de la destination (en-têtes d'authentification, `URL.headers.*`, `URL.queries.*`, cache et expiration des jetons, erreurs) et construction des requêtes OData.
 
@@ -320,7 +327,7 @@ Supprime les deux applications (avec leurs routes) et les services `sap-ai-copil
 
 ### Points d'attention
 
-- **Historique des conversations** : le disque d'une application Cloud Foundry est effacé à chaque redémarrage. Sur BTP, l'historique est donc temporaire. Une base gérée (SAP HANA Cloud ou PostgreSQL) le rendrait persistant.
+- **Historique des conversations et documents joints** : le disque d'une application Cloud Foundry est effacé à chaque redémarrage. Sur BTP, l'historique et les documents joints sont donc temporaires. Une base gérée (SAP HANA Cloud ou PostgreSQL) le rendrait persistant.
 - **Secrets** : les identifiants SAP AI Core sont dans un service user-provided, lisible par les membres du space ayant le rôle Space Developer (`cf env`). Une liaison directe à une instance SAP AI Core est l'alternative à privilégier en production. La connexion S/4HANA passe déjà par le Destination service.
 - **Région** : le domaine `cfapps.eu10-005.hana.ondemand.com` est indiqué dans `deploy/manifest.yml` et `deploy/xs-security.json`. Il faut l'adapter pour une autre région.
 - **Pourquoi un jeton plutôt qu'une route interne** : rendre le backend accessible uniquement depuis l'Application Router via une règle réseau demande le droit `network.write`, rarement accordé aux développeurs. La validation du jeton XSUAA protège l'API de la même façon, sans droit particulier.

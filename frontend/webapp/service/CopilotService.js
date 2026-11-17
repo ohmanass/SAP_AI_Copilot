@@ -79,10 +79,10 @@ sap.ui.define([
 			});
 		},
 
-		chat(message, sessionId, module) {
+		chat(message, sessionId, module, attachments) {
 			return this._request("chat", {
 				method: "POST",
-				body: { message, session_id: sessionId || null, module: module || null },
+				body: { message, session_id: sessionId || null, module: module || null, attachments: attachments || [] },
 				timeoutMs: this._chatTimeoutMs
 			});
 		},
@@ -96,7 +96,7 @@ sap.ui.define([
 		 * Rejects with kind "aborted" when the caller aborts through `signal`,
 		 * "timeout" when the backend stays silent too long, "stream" on a server-side error.
 		 */
-		async chatStream(message, sessionId, onEvent, signal, module) {
+		async chatStream(message, sessionId, onEvent, signal, module, attachments) {
 			const controller = new AbortController();
 			let timedOut = false;
 			let idleTimer;
@@ -117,7 +117,9 @@ sap.ui.define([
 				const response = await this._fetch(`${this._baseUrl}chat/stream`, {
 					method: "POST",
 					headers: { "Content-Type": "application/json", Accept: "application/x-ndjson" },
-					body: JSON.stringify({ message, session_id: sessionId || null, module: module || null }),
+					body: JSON.stringify({
+						message, session_id: sessionId || null, module: module || null, attachments: attachments || []
+					}),
 					signal: controller.signal
 				});
 
@@ -192,6 +194,24 @@ sap.ui.define([
 			return this._request(`sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
 		},
 
+		/** Attaches a document (File) to a conversation; resolves with its summary. */
+		uploadAttachment(sessionId, file) {
+			const form = new FormData();
+			form.append("file", file, file.name);
+			return this._request(`sessions/${encodeURIComponent(sessionId)}/attachments`, {
+				method: "POST",
+				formData: form,
+				timeoutMs: 120000
+			});
+		},
+
+		deleteAttachment(sessionId, attachmentId) {
+			return this._request(
+				`sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(attachmentId)}`,
+				{ method: "DELETE" }
+			);
+		},
+
 		getKnowledgeBase() {
 			return this._request("knowledge-base");
 		},
@@ -207,7 +227,10 @@ sap.ui.define([
 				signal: controller.signal
 			};
 
-			if (options.body !== undefined) {
+			if (options.formData) {
+				// The browser sets the multipart Content-Type with its boundary
+				init.body = options.formData;
+			} else if (options.body !== undefined) {
 				init.headers["Content-Type"] = "application/json";
 				init.body = JSON.stringify(options.body);
 			}
