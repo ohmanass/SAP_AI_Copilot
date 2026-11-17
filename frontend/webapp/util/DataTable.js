@@ -12,12 +12,13 @@ sap.ui.define([
 	"sap/m/ObjectStatus",
 	"sap/m/Button",
 	"sap/m/MessageToast",
+	"sap/base/Log",
 	"sap/ui/core/ResizeHandler",
 	"sap/ui/core/format/DateFormat",
 	"sap/ui/core/format/NumberFormat",
 	"./DataTableExport"
 ], (VBox, HBox, FlexBox, Title, Text, Label, Table, Column, ColumnListItem, ObjectNumber, ObjectStatus,
-	Button, MessageToast, ResizeHandler, DateFormat, NumberFormat, DataTableExport) => {
+	Button, MessageToast, Log, ResizeHandler, DateFormat, NumberFormat, DataTableExport) => {
 	"use strict";
 
 	/**
@@ -194,7 +195,11 @@ sap.ui.define([
 										return isEmpty(attribute.value) ? "" : String(attribute.value);
 								}
 							}
-						}).catch(() => MessageToast.show(text("dataExportError")))
+						}).catch((error) => {
+							// e.g. sap.ui.export not served: the UI5 dev server reads ui5.yaml at startup only
+							Log.error("Excel export failed", error && (error.message || String(error)), "com.sapaicopilot.app.DataTable");
+							MessageToast.show(text("dataExportError"));
+						})
 							.finally(() => button.setEnabled(true));
 					}
 				}).addStyleClass("cpDataExport"));
