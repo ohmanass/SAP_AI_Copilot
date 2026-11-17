@@ -420,6 +420,9 @@ class SAPAgent:
                     - Use database tools for transactional information.
                     - Use search_sap_documentation for technical questions and
                     for questions about the content of the knowledge base.
+                    - Always call search_sap_documentation before explaining an SAP
+                    concept, table, transaction, status or process, even a well-known
+                    one: answers must rely on the knowledge base, not on memory.
                     - Never answer that you have no access to some information
                     before searching the knowledge base when a document of the
                     catalogue may contain it, or when the user mentions the

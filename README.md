@@ -97,6 +97,7 @@ SAP_AI_Copilot/
 │   └── storage/            # Historique des conversations et documents joints (SQLite en local, SAP HANA Cloud sur BTP)
 ├── data/documents/         # Documentation indexée par le RAG
 ├── tests/                  # Tests pytest (rapprochement à trois, tableaux, connexion SAP)
+├── evals/                  # Évaluation de l'agent avec le vrai modèle
 ├── deploy/
 │   ├── approuter/          # Application Router (package.json, xs-app.json)
 │   ├── manifest.yml        # Applications Cloud Foundry
@@ -244,6 +245,7 @@ L'application s'ouvre sur `http://localhost:8080/index.html`. Le serveur de dév
 | `npm run build` | Build de production dans `frontend/dist` |
 | `python -m app.main` | Version en ligne de commande de l'agent |
 | `python -m pytest` | Tests automatisés du backend (depuis la racine du projet) |
+| `python -m evals.agent_eval` | Évaluation de la qualité de l'agent avec le vrai modèle (voir ci-dessous) |
 
 ### Tests
 
@@ -257,6 +259,12 @@ L'application s'ouvre sur `http://localhost:8080/index.html`. Le serveur de dév
 - les **documents joints** : extraction PDF / Word / Excel / texte, fichiers refusés (type, taille, archive piégée), lecture par parties, cloisonnement entre conversations, API d'envoi et de suppression ;
 - les **tableaux de données** : colonnes sans valeur retirées, limite de lignes, unités de total, actions sur les lignes, dédoublonnage ;
 - la **connexion SAP** : mode direct, lecture de la destination (en-têtes d'authentification, `URL.headers.*`, `URL.queries.*`, cache et expiration des jetons, erreurs) et construction des requêtes OData.
+
+### Évaluation de l'agent
+
+`python -m evals.agent_eval` pose une vingtaine de questions de référence au **vrai modèle** (SAP Generative AI Hub) et vérifie, pour chacune, les outils que l'agent doit appeler, ceux qu'il ne doit pas appeler et des mots attendus dans la réponse : choix de l'outil SAP, recherche dans la base de connaissances (y compris les documents ajoutés), respect du périmètre de chaque espace de travail, lecture des documents joints et résistance aux instructions cachées dans un document.
+
+Les outils SAP, la base de connaissances et les documents joints sont remplacés par des réponses préparées : aucun système SAP n'est appelé et seul le comportement du modèle est évalué. Options : `-k <texte>` pour ne lancer que certains cas, `--repeat N` pour répéter chaque cas (le modèle n'est pas totalement déterministe), `--json <fichier>` pour le détail. Une exécution prend une vingtaine de secondes et consomme quelques tokens ; elle ne fait pas partie de `python -m pytest`. À lancer après chaque modification du prompt, des descriptions d'outils ou des consignes des modules.
 
 ## Déploiement sur SAP BTP
 

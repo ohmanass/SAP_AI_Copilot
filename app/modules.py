@@ -81,7 +81,9 @@ MODULES = (
             "does not cover this topic, do not answer from general knowledge, and suggest "
             "the relevant workspace (for example MM for purchasing tables such as EKKO). "
             "This workspace has no access to transactional SAP data: if the user "
-            "asks for business data, say so and suggest the MM workspace."
+            "asks for business data, do not call any tool, say so and suggest the "
+            "matching workspace (MM for purchase orders, SD for sales orders, FI for "
+            "supplier invoices)."
         ),
         suggestions=(
             ("What are the different types of CDS views?", "CDS views", "sap-icon://database"),
@@ -109,7 +111,10 @@ MODULES = (
             "order-to-cash process). Use both when the user asks to explain a "
             "sales order value, for example a status code. "
             "Purchase orders and suppliers belong to the MM workspace: if the user "
-            "asks about them, do not call any tool, say so and suggest the MM workspace."
+            "asks about them, do not call any tool, say so and suggest the MM workspace. "
+            "Supplier invoices, payment blocks and the invoice match belong to the FI "
+            "workspace: if the user asks about them, do not call any tool, say so and "
+            "suggest the FI workspace."
         ),
         suggestions=(
             ("Show late sales orders.", "Late deliveries", "sap-icon://past"),
