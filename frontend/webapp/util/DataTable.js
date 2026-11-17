@@ -88,7 +88,61 @@ sap.ui.define([
 		return Number.isInteger(Number(value)) ? integerFormat.format(Number(value)) : numberFormat.format(Number(value));
 	}
 
+	/** Translated texts of a table: labels, statuses, title and value formatting. */
+	function helpers(controller) {
+		const text = (key, args) => controller.getText(key, args);
+		const optionalText = (key, fallback) => {
+			const bundle = controller.getOwnerComponent().getModel("i18n").getResourceBundle();
+			return bundle.hasText(key) ? bundle.getText(key) : fallback;
+		};
+		const label = (key) => optionalText(`dataCol.${key}`, key);
+		const statusText = (value) => (isEmpty(value) ? "" : optionalText(`dataStatus.${value}`, String(value)));
+		const blockText = (value) => (isEmpty(value) ? "" : text("dataBlocked", [value]));
+		const title = (table) => [optionalText(`dataTable.${table.kind}`, table.kind)].concat(table.title_params || []).join(" · ");
+
+		/** Display text of a value of a given column type (unit appended when given). */
+		const valueText = (value, type, unit) => {
+			switch (type) {
+				case "date":
+					return formatDate(value);
+				case "amount":
+				case "quantity":
+				case "number":
+					return isEmpty(value) ? "" : [formatNumber(value, type), unit].filter(Boolean).join(" ");
+				case "status":
+					return statusText(value);
+				case "block":
+					return blockText(value);
+				default:
+					return isEmpty(value) ? "" : String(value);
+			}
+		};
+		return { text, optionalText, label, statusText, blockText, title, valueText };
+	}
+
 	return {
+
+		/**
+		 * A table as plain texts (conversation export): title, source, header
+		 * attributes, column labels and formatted rows.
+		 */
+		toText(controller, table) {
+			const h = helpers(controller);
+			return {
+				title: h.title(table),
+				meta: [table.source, table.window].filter(Boolean),
+				attributes: (table.attributes || []).map((attribute) => ({
+					label: h.label(attribute.key),
+					value: h.valueText(attribute.value, attribute.type, attribute.unit)
+				})),
+				columns: table.columns.map((column) => h.label(column.key)),
+				rows: table.rows.map((row) => table.columns.map((column) =>
+					h.valueText(row[column.key], column.type, column.unit_key ? row[column.unit_key] : ""))),
+				total: table.total && table.total > table.rows.length
+					? h.text("dataShown", [integerFormat.format(table.rows.length), integerFormat.format(table.total)])
+					: ""
+			};
+		},
 
 		/**
 		 * Factory for the "tables" aggregation of a message.
@@ -96,15 +150,7 @@ sap.ui.define([
 		 */
 		create(controller, id, context) {
 			const table = context.getObject();
-			const text = (key, args) => controller.getText(key, args);
-			const optionalText = (key, fallback) => {
-				const bundle = controller.getOwnerComponent().getModel("i18n").getResourceBundle();
-				return bundle.hasText(key) ? bundle.getText(key) : fallback;
-			};
-
-			const label = (key) => optionalText(`dataCol.${key}`, key);
-			const statusText = (value) => (isEmpty(value) ? "" : optionalText(`dataStatus.${value}`, String(value)));
-			const blockText = (value) => (isEmpty(value) ? "" : text("dataBlocked", [value]));
+			const { text, optionalText, label, statusText, blockText, valueText } = helpers(controller);
 
 			/** Value control for a column type, bound to a row (or attribute) property. */
 			const valueControl = (type, path, unitPath) => {
@@ -148,7 +194,7 @@ sap.ui.define([
 			const container = new VBox(id, { renderType: "Bare" }).addStyleClass("cpDataTable");
 
 			// ---------- Header: title and provenance ----------
-			const title = [optionalText(`dataTable.${table.kind}`, table.kind)].concat(table.title_params || []).join(" · ");
+			const title = helpers(controller).title(table);
 			const meta = [];
 			if (table.source) {
 				meta.push(table.source);
@@ -179,22 +225,7 @@ sap.ui.define([
 							statusText,
 							blockText,
 							text,
-							attributeText: (attribute) => {
-								switch (attribute.type) {
-									case "date":
-										return formatDate(attribute.value);
-									case "amount":
-									case "quantity":
-									case "number":
-										return [formatNumber(attribute.value, attribute.type), attribute.unit].filter(Boolean).join(" ");
-									case "status":
-										return statusText(attribute.value);
-									case "block":
-										return blockText(attribute.value);
-									default:
-										return isEmpty(attribute.value) ? "" : String(attribute.value);
-								}
-							}
+							attributeText: (attribute) => valueText(attribute.value, attribute.type, attribute.unit)
 						}).catch((error) => {
 							// e.g. sap.ui.export not served: the UI5 dev server reads ui5.yaml at startup only
 							Log.error("Excel export failed", error && (error.message || String(error)), "com.sapaicopilot.app.DataTable");

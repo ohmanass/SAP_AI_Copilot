@@ -6,8 +6,12 @@ sap.ui.define([
 	"sap/m/MessageBox",
 	"../util/Markdown",
 	"../util/DataTable",
-	"../util/KnowledgeDialog"
-], (BaseController, JSONModel, EventBus, MessageToast, MessageBox, Markdown, DataTable, KnowledgeDialog) => {
+	"../util/KnowledgeDialog",
+	"../util/ConversationExport",
+	"sap/m/Menu",
+	"sap/m/MenuItem"
+], (BaseController, JSONModel, EventBus, MessageToast, MessageBox, Markdown, DataTable, KnowledgeDialog,
+	ConversationExport, Menu, MenuItem) => {
 	"use strict";
 
 	const TOOL_ICONS = {
@@ -547,6 +551,40 @@ sap.ui.define([
 			if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
 				event.preventDefault();
 				this.onSend();
+			}
+		},
+
+		/* ======================= Conversation export ======================= */
+
+		/** Top bar button: Markdown file or PDF (browser print dialog). */
+		onExportMenu(event) {
+			if (!this._exportMenu) {
+				this._exportMenu = new Menu({
+					items: [
+						new MenuItem({ text: this.getText("exportMarkdown"), icon: "sap-icon://attachment-text-file", key: "md" }),
+						new MenuItem({ text: this.getText("exportPdf"), icon: "sap-icon://pdf-attachment", key: "pdf" })
+					],
+					itemSelected: (selected) => this._export(selected.getParameter("item").getKey())
+				});
+				this.getView().addDependent(this._exportMenu);
+			}
+			this._exportMenu.openBy(event.getSource());
+		},
+
+		_export(format) {
+			const chat = this._chat();
+			const moduleInfo = chat.getProperty("/moduleInfo");
+			const conversation = {
+				title: chat.getProperty("/title") || this.getText("newConversationTitle"),
+				module: moduleInfo ? `${moduleInfo.code} · ${moduleInfo.name}` : "",
+				model: this.getOwnerComponent().getModel("app").getProperty("/model/chat") || "",
+				messages: chat.getProperty("/messages")
+			};
+			if (format === "pdf") {
+				ConversationExport.print(this, conversation);
+			} else {
+				ConversationExport.downloadMarkdown(this, conversation);
+				MessageToast.show(this.getText("exportDone"));
 			}
 		},
 

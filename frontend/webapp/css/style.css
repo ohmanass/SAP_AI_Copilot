@@ -460,6 +460,26 @@ html, body.cpBody {
 	display: none;
 }
 
+/* Conversation export (top bar) */
+.cpExportBtn.sapMBtn {
+	flex: none;
+	align-self: center;
+}
+
+.cpExportBtn .sapMBtnInner.sapMBtnTransparent {
+	border: 1px solid var(--cp-border);
+	border-radius: 999px;
+	background: rgba(14, 25, 44, 0.75);
+}
+
+.cpExportBtn .sapMBtnIcon {
+	color: var(--cp-text-2);
+}
+
+.cpExportBtn:hover .sapMBtnIcon {
+	color: var(--cp-cyan-soft);
+}
+
 .cpScroller {
 	flex: 1 1 auto;
 	min-height: 0;

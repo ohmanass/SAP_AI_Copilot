@@ -28,6 +28,15 @@
 							tooltip="{i18n>moduleLeave}"
 							press=".onLeaveModule"/>
 					</HBox>
+					<Button
+						id="exportButton"
+						icon="sap-icon://download"
+						type="Transparent"
+						class="cpExportBtn"
+						tooltip="{i18n>export}"
+						visible="{= ${chat>/messages}.length > 0 }"
+						enabled="{= !${chat>/busy} }"
+						press=".onExportMenu"/>
 					<HBox class="cpStatusPill" alignItems="Center" renderType="Bare">
 						<customData>
 							<core:CustomData key="state" value="{app>/backend/state}" writeToDom="true"/>
