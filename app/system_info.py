@@ -138,7 +138,8 @@ def get_knowledge_base(user=None):
             "origin": origin,
             "module": row["module"] if row else knowledge_store.bundled_module(name),
             # Authors are never sent to the browser: only whether it is the current user
-            "can_delete": bool(row and origin == "uploaded" and user and row["uploaded_by"] == user)
+            "can_delete": bool(row and origin == "uploaded" and user and row["uploaded_by"] == user),
+            "masked": (row or {}).get("masked") or {}
         }
 
     # Shipped files (also listed before their first indexing)

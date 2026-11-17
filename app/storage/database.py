@@ -83,7 +83,8 @@ CREATE TABLE IF NOT EXISTS attachments (
     text TEXT NOT NULL,
     truncated INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
-    owner TEXT
+    owner TEXT,
+    masked TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_attachments_session
@@ -101,7 +102,8 @@ CREATE TABLE IF NOT EXISTS kb_documents (
     content_hash TEXT NOT NULL,
     text TEXT NOT NULL,
     uploaded_by TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    masked TEXT
 );
 """
 
@@ -113,6 +115,8 @@ SQLITE_MIGRATIONS = (
     ("attachments", "chars", "INTEGER"),
     ("conversations", "owner", "TEXT"),
     ("attachments", "owner", "TEXT"),
+    ("attachments", "masked", "TEXT"),
+    ("kb_documents", "masked", "TEXT"),
 )
 
 # Local user of the SQLite history (no SAP login locally): see app.auth.LOCAL_USER
@@ -151,7 +155,8 @@ HANA_TABLES = {
             content_hash NVARCHAR(64) NOT NULL,
             text NCLOB NOT NULL,
             uploaded_by NVARCHAR(256),
-            created_at NVARCHAR(40) NOT NULL
+            created_at NVARCHAR(40) NOT NULL,
+            masked NVARCHAR(500)
         )""",
     # SAP HANA Cloud Vector Engine: chunk text and its embedding (dimension of the embedding model)
     "KB_CHUNKS": """
@@ -173,7 +178,8 @@ HANA_TABLES = {
             text NCLOB NOT NULL,
             truncated TINYINT NOT NULL,
             created_at NVARCHAR(40) NOT NULL,
-            owner NVARCHAR(256)
+            owner NVARCHAR(256),
+            masked NVARCHAR(500)
         )""",
 }
 
@@ -188,6 +194,8 @@ HANA_INDEXES = {
 HANA_MIGRATIONS = (
     ("CONVERSATIONS", "OWNER", "ALTER TABLE conversations ADD (owner NVARCHAR(256))"),
     ("ATTACHMENTS", "OWNER", "ALTER TABLE attachments ADD (owner NVARCHAR(256))"),
+    ("ATTACHMENTS", "MASKED", "ALTER TABLE attachments ADD (masked NVARCHAR(500))"),
+    ("KB_DOCUMENTS", "MASKED", "ALTER TABLE kb_documents ADD (masked NVARCHAR(500))"),
 )
 
 

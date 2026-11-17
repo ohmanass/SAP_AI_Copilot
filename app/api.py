@@ -18,6 +18,7 @@ from app import auth, system_info
 from app.agent.agent import SAPAgent
 from app.attachments import extract as attachment_extract
 from app.attachments import reader as attachment_reader
+from app.attachments import sensitive as attachment_sensitive
 from app.modules import MODULES, get_module
 from app.rag import knowledge_store
 from app.storage import chat_store
@@ -376,7 +377,8 @@ def add_knowledge_from_attachment(request: AttachmentToKnowledge, user: str = De
     if not found:
         raise HTTPException(status_code=404, detail="Document not found.")
     summary, text = found
-    return knowledge_store.add_document(summary["name"], text, module, user, summary["size_bytes"])
+    return knowledge_store.add_document(summary["name"], text, module, user, summary["size_bytes"],
+                                        masked_before=summary["masked"])
 
 
 @app.delete("/api/knowledge-base/documents/{name}")
@@ -435,7 +437,9 @@ def upload_attachment(session_id: str, file: UploadFile = File(...), user: str =
     except attachment_extract.ExtractionError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
-    return chat_store.add_attachment(session_id, user, name, len(data), pages, text, truncated)
+    # Credentials and card numbers never reach the database nor the model
+    text, masked = attachment_sensitive.mask(text, name, attachment_sensitive.PRIVATE)
+    return chat_store.add_attachment(session_id, user, name, len(data), pages, text, truncated, masked)
 
 
 @app.get("/api/sessions/{session_id}/attachments")

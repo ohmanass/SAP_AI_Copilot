@@ -16,6 +16,18 @@ sap.ui.define([
 	 */
 	return {
 
+		/** "2 passwords or secrets, 1 IBAN masked" from {kind: count} ("" when nothing was masked). */
+		maskedSummary(masked) {
+			const entries = Object.entries(masked || {}).filter(([, count]) => count > 0);
+			if (!entries.length) {
+				return "";
+			}
+			const parts = entries.map(([kind, count]) => this.getText(
+				count === 1 ? `maskedKind.${kind}` : `maskedKinds.${kind}`, [count]
+			));
+			return this.getText("maskedSummary", [parts.join(", ")]);
+		},
+
 		upper(value) {
 			return value ? String(value).toUpperCase() : "";
 		},

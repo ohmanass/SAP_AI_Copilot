@@ -98,7 +98,7 @@
 												<core:Icon src="{path: 'chat>name', formatter: '.formatAttachmentIcon'}" class="cpAttachmentIcon"/>
 												<VBox renderType="Bare" class="cpAttachmentText">
 													<Text text="{chat>name}" wrapping="false" class="cpAttachmentName" tooltip="{chat>name}"/>
-													<Text text="{parts: ['chat>pages', 'chat>chars'], formatter: '.formatAttachmentMeta'}" class="cpAttachmentMeta"/>
+													<Text text="{parts: ['chat>pages', 'chat>chars', 'chat>masked'], formatter: '.formatAttachmentMeta'}" class="cpAttachmentMeta"/>
 												</VBox>
 												<Button
 													icon="sap-icon://add-document"
@@ -203,7 +203,7 @@
 									visible="{chat>uploading}"
 									class="cpAttachmentMeta"/>
 								<Text
-									text="{parts: ['chat>pages', 'chat>chars'], formatter: '.formatAttachmentMeta'}"
+									text="{parts: ['chat>pages', 'chat>chars', 'chat>masked'], formatter: '.formatAttachmentMeta'}"
 									visible="{= !${chat>uploading} }"
 									class="cpAttachmentMeta"/>
 							</VBox>

@@ -17,12 +17,14 @@ Uploaded documents are reference material for the agent, never instructions.
 """
 
 import hashlib
+import json
 import logging
 import os
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+from app.attachments import sensitive
 from app.rag.document_loader import DOCUMENTS_PATH, split_text
 
 logger = logging.getLogger("sap_ai_copilot.knowledge")
@@ -249,17 +251,27 @@ def set_vectors(vectors):
 # Registry
 # ----------------------------------------------------------------------
 
-SUMMARY_COLUMNS = "name, module, origin, size_bytes, chars, chunks, content_hash, uploaded_by, created_at"
+SUMMARY_COLUMNS = "name, module, origin, size_bytes, chars, chunks, content_hash, uploaded_by, created_at, masked"
+
+
+def _summary(row):
+    if row is None:
+        return None
+    row = dict(row)
+    row["masked"] = json.loads(row["masked"]) if row.get("masked") else {}
+    return row
 
 
 def list_documents():
     with _registry().cursor() as cursor:
-        return cursor.execute(f"SELECT {SUMMARY_COLUMNS} FROM kb_documents ORDER BY name").fetchall()
+        return [_summary(row) for row in
+                cursor.execute(f"SELECT {SUMMARY_COLUMNS} FROM kb_documents ORDER BY name").fetchall()]
 
 
 def get_document(name):
     with _registry().cursor() as cursor:
-        return cursor.execute(f"SELECT {SUMMARY_COLUMNS} FROM kb_documents WHERE name = ?", (name,)).fetchone()
+        return _summary(cursor.execute(f"SELECT {SUMMARY_COLUMNS} FROM kb_documents WHERE name = ?",
+                                       (name,)).fetchone())
 
 
 def sources_for_module(module_key):
@@ -273,7 +285,7 @@ def sources_for_module(module_key):
     return [row["name"] for row in rows]
 
 
-def _index(name, text, module, origin, uploaded_by, size_bytes):
+def _index(name, text, module, origin, uploaded_by, size_bytes, masked=None):
     """Chunks, embeds and stores a document (vectors first: a failed embedding leaves nothing behind)."""
 
     chunks = split_document(name, text)
@@ -286,17 +298,22 @@ def _index(name, text, module, origin, uploaded_by, size_bytes):
         cursor.execute("DELETE FROM kb_documents WHERE name = ?", (name,))
         cursor.execute(
             "INSERT INTO kb_documents"
-            " (name, module, origin, size_bytes, chars, chunks, content_hash, text, uploaded_by, created_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (name, module, origin, size_bytes, len(text), len(chunks), _hash(text), text, uploaded_by, _now())
+            " (name, module, origin, size_bytes, chars, chunks, content_hash, text, uploaded_by, created_at, masked)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (name, module, origin, size_bytes, len(text), len(chunks), _hash(text), text, uploaded_by, _now(),
+             json.dumps(masked or {}))
         )
     return get_document(name)
 
 
-def add_document(name, text, module, uploaded_by, size_bytes=None):
-    """Add an uploaded document to the knowledge base."""
+def add_document(name, text, module, uploaded_by, size_bytes=None, masked_before=None):
+    """Add an uploaded document to the knowledge base (sensitive data masked first: it is shared)."""
 
-    text = (text or "").strip()
+    text, masked = sensitive.mask((text or "").strip(), name, sensitive.SHARED)
+    text = text.strip()
+    # Values already masked when the document was attached to a conversation
+    for kind, count in (masked_before or {}).items():
+        masked[kind] = masked.get(kind, 0) + count
     if not text:
         raise KnowledgeError("The document contains no text to index.", 422)
     if len(text) > MAX_KB_CHARS:
@@ -305,7 +322,7 @@ def add_document(name, text, module, uploaded_by, size_bytes=None):
         raise KnowledgeError(f"A document named '{name}' is already in the knowledge base.", 409)
     if (DOCUMENTS_PATH / name).exists():
         raise KnowledgeError(f"'{name}' is the name of a document shipped with the application.", 409)
-    return _index(name, text, module, "uploaded", uploaded_by, size_bytes or len(text.encode("utf-8")))
+    return _index(name, text, module, "uploaded", uploaded_by, size_bytes or len(text.encode("utf-8")), masked)
 
 
 def delete_document(name, user):
@@ -364,10 +381,42 @@ def sync_bundled():
         return actions
 
 
+def mask_unchecked_documents():
+    """
+    Mask the uploaded documents stored before sensitive data masking existed
+    (masked IS NULL): changed documents are embedded again. Returns their names.
+    """
+
+    with _registry().cursor() as cursor:
+        rows = cursor.execute(
+            "SELECT name, module, size_bytes, uploaded_by, text FROM kb_documents"
+            " WHERE origin = 'uploaded' AND masked IS NULL"
+        ).fetchall()
+    changed = []
+    for row in rows:
+        text, masked = sensitive.mask(row["text"], row["name"], sensitive.SHARED)
+        if text != row["text"]:
+            _index(row["name"], text, row["module"], "uploaded", row["uploaded_by"], row["size_bytes"], masked)
+            changed.append(row["name"])
+        else:
+            with _registry().cursor() as cursor:
+                cursor.execute("UPDATE kb_documents SET masked = ? WHERE name = ?", ("{}", row["name"]))
+    return changed
+
+
 def sync_bundled_in_background():
     """Startup: never blocks nor breaks the API (AI or database may be unavailable)."""
 
     def run():
+        try:
+            from app.storage import chat_store
+            masked = mask_unchecked_documents()
+            attachments = chat_store.mask_unchecked_attachments()
+            if masked or attachments:
+                logger.warning("Sensitive data masked in existing documents: knowledge base %s, %s attachment(s)",
+                               masked, attachments)
+        except Exception:
+            logger.exception("Masking of existing documents failed")
         try:
             actions = sync_bundled()
             logger.info("Knowledge base synchronised: %s", actions)

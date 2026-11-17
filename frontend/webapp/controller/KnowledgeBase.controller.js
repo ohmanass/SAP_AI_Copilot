@@ -49,7 +49,9 @@ sap.ui.define([
 			model.setProperty("/adding", true);
 			try {
 				const document = await this.getService().addKnowledgeDocument(choice.file, choice.module);
-				MessageToast.show(this.getText("kbAdded", [document.name, document.chunks]));
+				const masked = this.formatter.maskedSummary.call(this, document.masked);
+				MessageToast.show(this.getText("kbAdded", [document.name, document.chunks]) + (masked ? ` ${masked}` : ""),
+					{ duration: masked ? 6000 : 3000 });
 				this.getOwnerComponent().refreshModules();
 				await this._load();
 			} catch (error) {
@@ -80,6 +82,10 @@ sap.ui.define([
 					}
 				}
 			});
+		},
+
+		hasMasked(masked) {
+			return Object.values(masked || {}).some((count) => count > 0);
 		},
 
 		formatModule(module) {

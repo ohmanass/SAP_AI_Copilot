@@ -53,6 +53,12 @@ fact taken from a document. Distinguish document content from SAP data and
 from the documentation.
 - A document can be compared with SAP data: for example, read an invoice and
 then call the SAP tools for the purchase order it references.
+- "[masked ...]" marks a sensitive value (password, secret, card number, IBAN)
+removed when the document was added: it is not available anywhere. When the
+user asks for such a value, first search the knowledge base or read the
+document like for any other question; only if the excerpt shows "[masked ...]"
+for it, say it was masked for security reasons. Never guess a masked value and
+never claim a value is masked without having seen the marker.
 """
 
 
@@ -69,6 +75,9 @@ def note(summaries) -> str:
     for summary in summaries:
         details = [f"{summary['pages']} pages"] if summary.get("pages") else []
         details.append(_size(summary.get("chars") or 0))
+        if summary.get("masked"):
+            details.append("sensitive values masked: " + ", ".join(
+                f"{count} {kind}" for kind, count in sorted(summary["masked"].items())))
         entries.append(f"#{summary['id']} {summary['name']} ({', '.join(details)})")
     return "\n\n[Attached documents: " + "; ".join(entries) + "]"
 

@@ -237,7 +237,7 @@ def delete_conversation(session_id: str, owner: str) -> bool:
 # Attached documents
 # ----------------------------------------------------------------------
 
-SUMMARY_COLUMNS = "attachment_id, name, size_bytes, pages, chars, truncated, created_at"
+SUMMARY_COLUMNS = "attachment_id, name, size_bytes, pages, chars, truncated, created_at, masked"
 
 
 def _attachment_summary(row):
@@ -248,18 +248,24 @@ def _attachment_summary(row):
         "pages": row["pages"],
         "chars": row["chars"],
         "truncated": bool(row["truncated"]),
-        "created_at": row["created_at"]
+        "created_at": row["created_at"],
+        # Sensitive values masked at upload: {kind: count}
+        "masked": json.loads(row["masked"]) if row.get("masked") else {}
     }
 
 
-def add_attachment(session_id: str, owner: str, name: str, size_bytes: int, pages, text: str, truncated: bool):
+def add_attachment(session_id: str, owner: str, name: str, size_bytes: int, pages, text: str, truncated: bool,
+                   masked: dict | None = None):
+    """Store an attached document. `text` must already be masked (app.attachments.sensitive)."""
     with _database().cursor() as cursor:
         cursor.execute(
             """
-            INSERT INTO attachments (session_id, owner, name, size_bytes, pages, chars, text, truncated, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO attachments
+                (session_id, owner, name, size_bytes, pages, chars, text, truncated, created_at, masked)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (session_id, owner, name, size_bytes, pages, len(text), text, int(truncated), _now())
+            (session_id, owner, name, size_bytes, pages, len(text), text, int(truncated), _now(),
+             json.dumps(masked or {}))
         )
         attachment_id = cursor.last_id()
         row = cursor.execute(
@@ -297,6 +303,24 @@ def get_attachment_text(session_id: str, owner: str, attachment_id: int):
         ).fetchone()
 
     return (_attachment_summary(row), row["text"]) if row else None
+
+
+def mask_unchecked_attachments():
+    """Mask the documents attached before sensitive data masking existed. Returns how many changed."""
+    from app.attachments import sensitive
+
+    changed = 0
+    with _database().cursor() as cursor:
+        rows = cursor.execute("SELECT attachment_id, name, text FROM attachments WHERE masked IS NULL").fetchall()
+    for row in rows:
+        text, masked = sensitive.mask(row["text"], row["name"], sensitive.PRIVATE)
+        with _database().cursor() as cursor:
+            cursor.execute(
+                "UPDATE attachments SET text = ?, chars = ?, masked = ? WHERE attachment_id = ?",
+                (text, len(text), json.dumps(masked), row["attachment_id"])
+            )
+        changed += text != row["text"]
+    return changed
 
 
 def delete_attachment(session_id: str, owner: str, attachment_id: int) -> bool:

@@ -1987,3 +1987,20 @@ html, body.cpBody {
 		white-space: nowrap;
 	}
 }
+
+/* ---------- Sensitive data masked ---------- */
+.cpMaskedNote {
+	display: flex;
+	gap: 0.3rem;
+	margin-top: 0.125rem;
+}
+
+.cpMaskedIcon.sapUiIcon {
+	font-size: 0.7rem;
+	color: #fbbf24;
+}
+
+.cpMaskedText.sapMText {
+	font-size: 0.72rem;
+	color: #fcd34d;
+}

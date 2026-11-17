@@ -680,6 +680,10 @@ sap.ui.define([
 						return;
 					}
 					this._replaceAttachment(entry.localId, Object.assign(summary, { localId: entry.localId, uploading: false }));
+					const masked = this.formatter.maskedSummary.call(this, summary.masked);
+					if (masked) {
+						MessageToast.show(`${summary.name}: ${masked}`, { duration: 5000 });
+					}
 				} catch (error) {
 					if (key !== this._conversationKey) {
 						return;
@@ -712,7 +716,9 @@ sap.ui.define([
 			MessageToast.show(this.getText("kbAdding", [attachment.name]));
 			try {
 				const document = await this.getService().addKnowledgeFromAttachment(sessionId, attachment.id, choice.module);
-				MessageToast.show(this.getText("kbAdded", [document.name, document.chunks]));
+				const masked = this.formatter.maskedSummary.call(this, document.masked);
+				MessageToast.show(this.getText("kbAdded", [document.name, document.chunks]) + (masked ? ` ${masked}` : ""),
+					{ duration: masked ? 6000 : 3000 });
 				this.getOwnerComponent().refreshModules();
 			} catch (error) {
 				MessageBox.error(this.getText("kbAddFailed", [error.detail || this.describeError(error)]));
@@ -765,13 +771,17 @@ sap.ui.define([
 			return ATTACHMENT_ICONS[extensionOf(name)] || "sap-icon://document-text";
 		},
 
-		formatAttachmentMeta(pages, chars) {
+		formatAttachmentMeta(pages, chars, masked) {
 			const parts = [];
+			const count = Object.values(masked || {}).reduce((sum, value) => sum + value, 0);
 			if (pages) {
 				parts.push(this.getText(pages === 1 ? "attachmentPage" : "attachmentPages", [pages]));
 			}
 			if (typeof chars === "number") {
 				parts.push(this.getText("attachmentChars", [new Intl.NumberFormat().format(chars)]));
+			}
+			if (count) {
+				parts.push(this.getText(count === 1 ? "attachmentMaskedOne" : "attachmentMasked", [count]));
 			}
 			return parts.join(" · ");
 		},

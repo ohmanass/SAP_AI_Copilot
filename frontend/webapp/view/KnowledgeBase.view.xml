@@ -109,6 +109,11 @@
 								<VBox renderType="Bare">
 									<Text text="{kb>name}" class="cpDocName"/>
 									<Text text="{parts: ['kb>origin', 'kb>/data/documents_path', 'kb>name'], formatter: '.formatDocumentLocation'}" class="cpDocPath"/>
+									<HBox alignItems="Center" renderType="Bare" class="cpMaskedNote"
+										visible="{path: 'kb>masked', formatter: '.hasMasked'}">
+										<core:Icon src="sap-icon://locked" class="cpMaskedIcon"/>
+										<Text text="{path: 'kb>masked', formatter: '.formatter.maskedSummary'}" class="cpMaskedText"/>
+									</HBox>
 								</VBox>
 							</HBox>
 							<Text text="{path: 'kb>module', formatter: '.formatModule'}" class="cpKbModule"/>
@@ -140,6 +145,7 @@
 				</HBox>
 				<Text text="{i18n>kbHowToText}" class="cpCardText"/>
 				<Text text="{i18n>kbHowToShipped}" class="cpCardText"/>
+				<Text text="{i18n>kbHowToSensitive}" class="cpCardText"/>
 				<Text text="{i18n>kbHowToNote}" class="cpCardNote"/>
 			</VBox>
 		</VBox>
