@@ -44,6 +44,11 @@ def reset():
     _initialized = False
 
 
+def database():
+    """Database of the history, tables created (shared with the knowledge base registry)."""
+    return _database()
+
+
 def _database():
     global _initialized
     database = get_database()

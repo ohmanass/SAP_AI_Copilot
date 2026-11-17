@@ -1938,3 +1938,52 @@ html, body.cpBody {
 		display: none;
 	}
 }
+
+/* ---------- Knowledge base: added documents ---------- */
+.cpKpiHint.sapMText {
+	margin-top: 0.25rem;
+	font-size: 0.75rem;
+	color: var(--cp-muted);
+}
+
+.cpKbModule.sapMText {
+	font-family: var(--cp-mono);
+	font-size: 0.78rem;
+	color: var(--cp-cyan-soft);
+}
+
+.cpKbDialog {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	padding: 1rem 1.25rem 1.25rem;
+}
+
+.cpKbDialogText.sapMText {
+	margin-bottom: 0.5rem;
+	line-height: 1.5;
+}
+
+.cpKbFileRow {
+	display: flex;
+	gap: 0.75rem;
+	min-width: 0;
+}
+
+.cpKbFileName.sapMText {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	color: var(--cp-text-2);
+}
+
+@media (max-width: 480px) {
+	/* Icon-only header actions on phones (text kept for screen readers) */
+	.cpPageHeader .cpKbAddBtn .sapMBtnContent {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+}

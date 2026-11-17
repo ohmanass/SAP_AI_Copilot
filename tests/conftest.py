@@ -6,10 +6,14 @@ external answer is simulated. The SAP connection is reset to a known local
 configuration so the developer's .env does not change the results.
 """
 
+import os
 import sys
 from pathlib import Path
 
 import pytest
+
+# Importing the API must not index the knowledge base (it would call SAP AI Core)
+os.environ["KB_SYNC_ON_STARTUP"] = "0"
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:

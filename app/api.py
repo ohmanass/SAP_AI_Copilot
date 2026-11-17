@@ -4,11 +4,12 @@ from app import cloud_env  # noqa: F401
 
 import json
 import logging
+import os
 import re
 import threading
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -17,7 +18,8 @@ from app import auth, system_info
 from app.agent.agent import SAPAgent
 from app.attachments import extract as attachment_extract
 from app.attachments import reader as attachment_reader
-from app.modules import get_module
+from app.modules import MODULES, get_module
+from app.rag import knowledge_store
 from app.storage import chat_store
 
 
@@ -44,6 +46,15 @@ app.add_middleware(
 auth.install(app)
 
 chat_store.initialize()
+
+# Index new or changed shipped documents (SAP HANA Cloud Vector Engine on BTP, ChromaDB locally)
+if os.getenv("KB_SYNC_ON_STARTUP", "1") != "0":
+    knowledge_store.sync_bundled_in_background()
+
+
+@app.exception_handler(knowledge_store.KnowledgeError)
+def knowledge_error(request, error):
+    return JSONResponse(status_code=error.status, content={"detail": str(error)})
 
 
 @app.exception_handler(chat_store.StoreUnavailable)
@@ -319,8 +330,59 @@ def delete_session(session_id: str, user: str = Depends(current_user)):
 
 
 @app.get("/api/knowledge-base")
-def knowledge_base():
-    return system_info.get_knowledge_base()
+def knowledge_base(user: str = Depends(current_user)):
+    return system_info.get_knowledge_base(user)
+
+
+# Workspaces whose agent searches the documentation (None: every workspace / general assistant)
+KB_MODULES = {module.key for module in MODULES if "search_sap_documentation" in module.tools}
+
+
+def _kb_module(module):
+    module = (module or "").strip().lower() or None
+    if module is not None and module not in KB_MODULES:
+        raise HTTPException(status_code=422, detail="Unknown module.")
+    return module
+
+
+@app.post("/api/knowledge-base/documents")
+def add_knowledge_document(file: UploadFile = File(...), module: str = Form(""),
+                           user: str = Depends(current_user)):
+    """Add a document to the knowledge base (text extracted, chunked and embedded)."""
+
+    module = _kb_module(module)
+    name = _clean_filename(file.filename)
+    data = file.file.read(attachment_extract.MAX_FILE_BYTES + 1)
+    try:
+        text, _, _ = attachment_extract.extract_text(name, data)
+    except attachment_extract.ExtractionError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return knowledge_store.add_document(name, text, module, user, len(data))
+
+
+class AttachmentToKnowledge(BaseModel):
+    session_id: str = Field(max_length=100)
+    attachment_id: int
+    module: str | None = Field(default=None, max_length=20)
+
+
+@app.post("/api/knowledge-base/documents/from-attachment")
+def add_knowledge_from_attachment(request: AttachmentToKnowledge, user: str = Depends(current_user)):
+    """Add a document already attached to one of the user's conversations."""
+
+    _check_session_id(request.session_id)
+    module = _kb_module(request.module)
+    found = chat_store.get_attachment_text(request.session_id, user, request.attachment_id)
+    if not found:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    summary, text = found
+    return knowledge_store.add_document(summary["name"], text, module, user, summary["size_bytes"])
+
+
+@app.delete("/api/knowledge-base/documents/{name}")
+def delete_knowledge_document(name: str, user: str = Depends(current_user)):
+    knowledge_store.delete_document(name, user)
+    return {"deleted": name}
 
 
 @app.get("/api/status")

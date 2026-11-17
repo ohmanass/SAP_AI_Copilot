@@ -20,7 +20,8 @@ L'application fonctionne en local et se déploie sur **SAP BTP (Cloud Foundry)**
 - **Documents joints** : bouton **+** dans la zone de saisie pour joindre des PDF, Word (`.docx`), Excel (`.xlsx`) et fichiers texte (`.txt`, `.md`, `.csv`, `.json`, `.xml`…), 10 Mo par fichier. L'agent les lit, les résume et les croise avec les données SAP (par exemple une facture PDF comparée au rapprochement à trois de la commande qu'elle cite). Seul le texte extrait est conservé, avec la conversation ; le contenu d'un document est traité comme une donnée, jamais comme une instruction
 - Données transactionnelles lues dans **SAP S/4HANA Cloud** via les API officielles `API_PURCHASEORDER_2` et `API_SALESORDER` (OData V4), `API_SUPPLIERINVOICE_PROCESS_SRV`, `API_MATERIAL_DOCUMENT_SRV` et `API_BUSINESS_PARTNER` (OData V2), ou dans une base SQLite de démonstration (achats uniquement) utilisable hors ligne
 - **Espaces de travail par module** (MM, SD, FI, ABAP) : l'agent n'utilise que les outils et la documentation du module choisi
-- RAG sur ChromaDB avec les embeddings `text-embedding-3-large`
+- RAG sur le **SAP HANA Cloud Vector Engine** (`REAL_VECTOR`, similarité cosinus) sur SAP BTP, sur ChromaDB en local, avec les embeddings `text-embedding-3-large` de SAP Generative AI Hub
+- **Base de connaissances enrichissable depuis l'interface** : ajout d'un PDF, Word, Excel ou fichier texte pour un espace de travail (MM, SD, FI, ABAP) ou pour tous, depuis la page Knowledge Base ou depuis un document joint dans une conversation ; l'agent du module le consulte aussitôt. Les documents livrés (`data/documents`) sont indexés au démarrage du backend, et seulement s'ils ont changé
 - Réponses fondées sur les données et les documents récupérés, avec citation des sources
 
 ### Interface SAPUI5
@@ -33,7 +34,7 @@ L'application fonctionne en local et se déploie sur **SAP BTP (Cloud Foundry)**
 - **Export Excel** de chaque tableau (bouton dans son en-tête) : toutes les colonnes, y compris celles masquées à l'écran, avec des cellules typées (dates, nombres, montants dans leur devise, quantités et unités) et une feuille *Information* (système SAP, période, totaux, en-tête du document, date d'export). Le fichier `.xlsx` est généré dans le navigateur (`sap.ui.export`) et contient les lignes affichées
 - Page **Modules** : un espace de travail par module SAP, avec un statut réel (connecté, documentation, prévu), ses outils, sa documentation et ses suggestions
 - Historique persistant : nouvelle conversation, liste, reprise, renommage, suppression. Chaque conversation garde son module. Le contexte de l'agent est restauré après un redémarrage du backend. Stocké dans **SAP HANA Cloud** sur SAP BTP, dans SQLite en local
-- Page **Knowledge Base** : documents indexés, nombre de chunks indexés et attendus, statut d'indexation
+- Page **Knowledge Base** : documents livrés et ajoutés, espace de travail, nombre de chunks indexés et attendus, statut d'indexation, moteur vectoriel ; ajout et suppression de documents (par leur auteur)
 - Page **Settings** : statut en direct du backend, de l'IA (avec test de connexion), de la base vectorielle et des données SAP
 - Thème sombre bleu nuit basé sur `sap_horizon_dark`, responsive desktop et tablette
 
@@ -128,7 +129,10 @@ SAP_AI_Copilot/
 | `POST` | `/api/sessions/{id}/attachments` | Joint un document (multipart, champ `file`) ; la conversation peut ne pas encore exister. Renvoie l'`id`, le nom, le nombre de pages et de caractères |
 | `GET` | `/api/sessions/{id}/attachments` | Documents joints à une conversation |
 | `DELETE` | `/api/sessions/{id}/attachments/{attachment_id}` | Retire un document joint |
-| `GET` | `/api/knowledge-base` | Documents, chunks indexés et statut |
+| `GET` | `/api/knowledge-base` | Documents, espace de travail, chunks indexés, statut et moteur vectoriel |
+| `POST` | `/api/knowledge-base/documents` | Ajoute un document à la base de connaissances (multipart : `file`, `module` vide = tous les espaces) |
+| `POST` | `/api/knowledge-base/documents/from-attachment` | Ajoute un document joint d'une conversation de l'utilisateur (`session_id`, `attachment_id`, `module`) |
+| `DELETE` | `/api/knowledge-base/documents/{name}` | Retire un document ajouté (par son auteur uniquement) |
 | `GET` | `/api/status?check_ai=true` | Statut du backend, de l'IA, de ChromaDB et de SQLite |
 
 Exemple :
@@ -213,7 +217,7 @@ Copy-Item .env.example .env
 # Données SAP MM fictives (SQLite), utilisées si SAP_DATA_SOURCE=sqlite
 python -m app.database.seed
 
-# Indexation de la documentation dans ChromaDB (appelle le modèle d'embeddings)
+# Indexation de la documentation livrée (facultatif : le backend la fait au démarrage)
 python -m app.rag.index_documents
 
 uvicorn app.api:app --reload --port 8000
@@ -248,6 +252,7 @@ L'application s'ouvre sur `http://localhost:8080/index.html`. Le serveur de dév
 - le **rapprochement à trois** : chaque statut, retours et annulations d'entrées, avoirs, factures annulées, débits ultérieurs, tolérance de prix, solde GR/IR, numéros de poste au format différent selon l'API ;
 - l'**historique** : conversations, messages, documents joints, textes longs et unicode, **isolation entre utilisateurs** (lecture, modification, suppression, envoi de messages et de documents dans la conversation d'un autre), migration des anciens fichiers SQLite et des tables HANA, démarrage sans base disponible. Les mêmes tests tournent sur SAP HANA Cloud quand `HANA_TEST_KEY_FILE` désigne la clé d'un service `hana` (`cf service-key …`) ;
 - l'**identité** : utilisateur tiré du jeton validé uniquement (un en-tête envoyé par le navigateur est ignoré), refus sans jeton ;
+- la **base de connaissances** : synchronisation des documents livrés (nouveau, inchangé, modifié, supprimé), recherche limitée aux documents d'un espace, ajout, doublons, suppression par l'auteur seulement, échec d'embedding sans trace, ajout depuis un document joint et API. Les mêmes tests tournent sur le SAP HANA Cloud Vector Engine avec `HANA_TEST_KEY_FILE` ;
 - les **documents joints** : extraction PDF / Word / Excel / texte, fichiers refusés (type, taille, archive piégée), lecture par parties, cloisonnement entre conversations, API d'envoi et de suppression ;
 - les **tableaux de données** : colonnes sans valeur retirées, limite de lignes, unités de total, actions sur les lignes, dédoublonnage ;
 - la **connexion SAP** : mode direct, lecture de la destination (en-têtes d'authentification, `URL.headers.*`, `URL.queries.*`, cache et expiration des jetons, erreurs) et construction des requêtes OData.
@@ -267,7 +272,7 @@ sap-ai-copilot-backend     (Python, FastAPI)
    ├── sap-ai-copilot-aicore  ─►  SAP Generative AI Hub
    ├── sap-ai-copilot-destination ─►  destination ─►  SAP S/4HANA Cloud (OData V2 et V4)
    ├── sap-ai-copilot-hana    ─►  schéma SAP HANA Cloud : historique et documents joints
-   └── ChromaDB               ─►  index RAG embarqué au déploiement
+   └── (sap-ai-copilot-hana)  ─►  SAP HANA Cloud Vector Engine : base de connaissances du RAG
 ```
 
 | Ressource Cloud Foundry | Type | Rôle |
@@ -355,8 +360,7 @@ Les documents de `data/documents` servent de base documentaire au RAG.
 
 ## Pistes d'évolution
 
-- Import et ré-indexation de documents depuis l'interface
 
 ## Stack technique
 
-SAPUI5 1.136 · UI5 Tooling 4 · FastAPI · SAP Generative AI Hub · SAP AI SDK · SAP S/4HANA Cloud OData V2 et V4 · SAP BTP Cloud Foundry · Application Router · XSUAA · Destination service · SAP HANA Cloud · ChromaDB · SQLite · Python 3.12
+SAPUI5 1.136 · UI5 Tooling 4 · FastAPI · SAP Generative AI Hub · SAP AI SDK · SAP S/4HANA Cloud OData V2 et V4 · SAP BTP Cloud Foundry · Application Router · XSUAA · Destination service · SAP HANA Cloud (Vector Engine) · ChromaDB · SQLite · Python 3.12

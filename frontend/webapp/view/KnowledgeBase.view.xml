@@ -14,6 +14,15 @@
 					<Title text="{i18n>kbTitle}" level="H1" class="cpPageTitle"/>
 					<Text text="{i18n>kbSubtitle}" class="cpPageSubtitle"/>
 				</VBox>
+				<Button
+					text="{i18n>kbAddButton}"
+					icon="sap-icon://add-document"
+					type="Emphasized"
+					class="cpKbAddBtn"
+					press=".onAddDocument"
+					busy="{kb>/adding}"
+					busyIndicatorDelay="0"
+					enabled="{= !${kb>/busy} &amp;&amp; !${kb>/adding} }"/>
 				<Button text="{i18n>refresh}" icon="sap-icon://refresh" class="cpGhostBtn" press=".onRefresh" enabled="{= !${kb>/busy} }"/>
 			</HBox>
 
@@ -47,6 +56,7 @@
 					<core:Icon src="sap-icon://dimension" class="cpKpiIcon"/>
 					<Text text="{i18n>kbChunks}" class="cpKpiLabel"/>
 					<Text text="{= ${kb>/data} ? String(${kb>/data/summary/total_chunks}) : '—' }" class="cpKpiValue"/>
+					<Text text="{kb>/data/vector_store/backend}" class="cpKpiHint" visible="{= !!${kb>/data/vector_store/backend} }"/>
 				</VBox>
 				<VBox class="cpKpi" renderType="Bare">
 					<core:Icon src="sap-icon://chain-link" class="cpKpiIcon"/>
@@ -70,6 +80,9 @@
 						<Column width="34%">
 							<Text text="{i18n>kbColDocument}"/>
 						</Column>
+						<Column minScreenWidth="28rem" demandPopin="true">
+							<Text text="{i18n>kbColModule}"/>
+						</Column>
 						<Column minScreenWidth="Tablet" demandPopin="true">
 							<Text text="{i18n>kbColType}"/>
 						</Column>
@@ -85,6 +98,9 @@
 						<Column minScreenWidth="Desktop" demandPopin="true">
 							<Text text="{i18n>kbColModified}"/>
 						</Column>
+						<Column width="3rem" hAlign="End">
+							<Text text="" tooltip="{i18n>kbColActions}"/>
+						</Column>
 					</columns>
 					<items>
 						<ColumnListItem>
@@ -92,9 +108,10 @@
 								<core:Icon src="sap-icon://document-text" class="cpDocIcon"/>
 								<VBox renderType="Bare">
 									<Text text="{kb>name}" class="cpDocName"/>
-									<Text text="{= ${kb>/data/documents_path} + '/' + ${kb>name} }" class="cpDocPath"/>
+									<Text text="{parts: ['kb>origin', 'kb>/data/documents_path', 'kb>name'], formatter: '.formatDocumentLocation'}" class="cpDocPath"/>
 								</VBox>
 							</HBox>
+							<Text text="{path: 'kb>module', formatter: '.formatModule'}" class="cpKbModule"/>
 							<Text text="{kb>type}"/>
 							<Text text="{path: 'kb>size_bytes', formatter: '.formatter.fileSize'}"/>
 							<Text text="{parts: ['kb>indexed_chunks', 'kb>expected_chunks'], formatter: '.formatter.kbChunks'}"/>
@@ -104,6 +121,12 @@
 								icon="{path: 'kb>status', formatter: '.formatter.kbStatusIcon'}"
 								inverted="true"/>
 							<Text text="{path: 'kb>modified_at', formatter: '.formatter.dateTime'}"/>
+							<Button
+								icon="sap-icon://delete"
+								type="Transparent"
+								tooltip="{i18n>kbDelete}"
+								visible="{kb>can_delete}"
+								press=".onDeleteDocument"/>
 						</ColumnListItem>
 					</items>
 				</Table>
@@ -116,7 +139,7 @@
 					<Title text="{i18n>kbHowToTitle}" level="H3" class="cpCardTitle"/>
 				</HBox>
 				<Text text="{i18n>kbHowToText}" class="cpCardText"/>
-				<Text text="{i18n>kbHowToCommand}" class="cpCodeLine"/>
+				<Text text="{i18n>kbHowToShipped}" class="cpCardText"/>
 				<Text text="{i18n>kbHowToNote}" class="cpCardNote"/>
 			</VBox>
 		</VBox>

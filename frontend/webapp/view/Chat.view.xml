@@ -100,6 +100,13 @@
 													<Text text="{chat>name}" wrapping="false" class="cpAttachmentName" tooltip="{chat>name}"/>
 													<Text text="{parts: ['chat>pages', 'chat>chars'], formatter: '.formatAttachmentMeta'}" class="cpAttachmentMeta"/>
 												</VBox>
+												<Button
+													icon="sap-icon://add-document"
+													type="Transparent"
+													class="cpAttachmentRemove"
+													tooltip="{i18n>attachmentToKnowledge}"
+													visible="{= !!${chat>/sessionId} }"
+													press=".onAttachmentToKnowledge"/>
 											</HBox>
 										</HBox>
 

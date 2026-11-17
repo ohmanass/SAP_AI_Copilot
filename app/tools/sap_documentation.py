@@ -1,25 +1,16 @@
+from app.rag import knowledge_store
 
-from app.rag.retriever import SAPRetriever
 
-
-# Cette fonction sert d'intermédiaire entre ton agent et ChromaDB. Elle renvoie les extraits et leurs références, sans générer elle-même de réponse
 def search_sap_documentation(query: str, n_results: int = 3, sources=None):
     """
-    Search the SAP technical documentation using semantic retrieval.
+    Search the SAP knowledge base (semantic retrieval). Returns the excerpts and
+    their references; the agent writes the answer.
 
     `sources` (set by the agent for module workspaces, never by the LLM)
-    restricts the search to the given document files.
+    restricts the search to the given documents.
     """
 
-    retriever = SAPRetriever()
-
-    where = {"source": {"$in": list(sources)}} if sources else None
-
-    results = retriever.retrieve(
-        query=query,
-        n_results=n_results,
-        where=where
-    )
+    results = knowledge_store.search(query, n_results=n_results, sources=sources)
 
     if not results:
         return {
@@ -31,9 +22,9 @@ def search_sap_documentation(query: str, n_results: int = 3, sources=None):
         "found": True,
         "documents": [
             {
-                "source": result["metadata"]["source"],
-                "chunk": result["metadata"]["chunk_index"],
-                "distance": round(result["distance"], 4),
+                "source": result["source"],
+                "chunk": result["chunk"],
+                "distance": result["distance"],
                 "content": result["content"]
             }
             for result in results

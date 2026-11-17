@@ -212,6 +212,26 @@ sap.ui.define([
 			);
 		},
 
+		/** Adds a file to the knowledge base, for one module (or every workspace when empty). */
+		addKnowledgeDocument(file, module) {
+			const form = new FormData();
+			form.append("file", file, file.name);
+			form.append("module", module || "");
+			return this._request("knowledge-base/documents", { method: "POST", formData: form, timeoutMs: 300000 });
+		},
+
+		addKnowledgeFromAttachment(sessionId, attachmentId, module) {
+			return this._request("knowledge-base/documents/from-attachment", {
+				method: "POST",
+				body: { session_id: sessionId, attachment_id: attachmentId, module: module || null },
+				timeoutMs: 300000
+			});
+		},
+
+		deleteKnowledgeDocument(name) {
+			return this._request(`knowledge-base/documents/${encodeURIComponent(name)}`, { method: "DELETE" });
+		},
+
 		getKnowledgeBase() {
 			return this._request("knowledge-base");
 		},

@@ -7,20 +7,20 @@ Never return secrets: only booleans, counts and non-sensitive names.
 
 import os
 import time
+from pathlib import Path
 from datetime import datetime, timezone
 
-import chromadb
 from dotenv import load_dotenv
 
 from app.database.connection import DB_PATH, get_connection
-from app.rag.document_loader import DOCUMENTS_PATH, split_text
-from app.rag.vector_store import CHROMA_PATH
+from app.rag import knowledge_store
+from app.rag.document_loader import DOCUMENTS_PATH
 from app.sap_data import get_data_source
 from app.storage import chat_store
 
 load_dotenv()
 
-COLLECTION_NAME = "sap_knowledge"
+COLLECTION_NAME = knowledge_store.COLLECTION_NAME
 
 REQUIRED_AI_CORE_VARIABLES = (
     "AICORE_CLIENT_ID",
@@ -34,7 +34,9 @@ DOCUMENT_TYPES = {
     ".txt": "Plain text",
     ".md": "Markdown",
     ".pdf": "PDF",
-    ".docx": "Word document"
+    ".docx": "Word document",
+    ".xlsx": "Excel workbook",
+    ".csv": "CSV"
 }
 
 
@@ -51,19 +53,9 @@ def _iso(timestamp):
 
 
 def _indexed_chunks_by_source():
-    """Return ({source: chunk_count}, total) from ChromaDB without creating anything."""
-
-    client = chromadb.PersistentClient(path=str(CHROMA_PATH))
-    collection = client.get_collection(COLLECTION_NAME)
-
-    metadatas = collection.get(include=["metadatas"])["metadatas"] or []
-
-    counts = {}
-    for metadata in metadatas:
-        source = (metadata or {}).get("source", "unknown")
-        counts[source] = counts.get(source, 0) + 1
-
-    return counts, collection.count()
+    """({source: chunk_count}, total) from the vector store."""
+    counts = knowledge_store.get_vectors().counts()
+    return counts, sum(counts.values())
 
 
 def get_modules():
@@ -73,11 +65,15 @@ def get_modules():
 
     try:
         indexed, _ = _indexed_chunks_by_source()
+        added = {}
+        for document in knowledge_store.list_documents():
+            if document["origin"] == "uploaded" and document["module"]:
+                added.setdefault(document["module"], []).append(document["name"])
     except Exception:
-        indexed = {}
+        indexed, added = {}, {}
 
     source = get_data_source()
-    modules = describe_modules(indexed)
+    modules = describe_modules(indexed, added)
     for module in modules:
         if module["status"] == "connected":
             # Transactional modules read the configured SAP data source
@@ -91,16 +87,20 @@ def get_modules():
     return modules
 
 
-def get_knowledge_base():
+def get_knowledge_base(user=None):
+    """Documents of the knowledge base, their indexing state and the vector store."""
 
     vector_store = {
         "available": True,
+        "backend": None,
         "collection": COLLECTION_NAME,
         "total_chunks": 0,
         "error": None
     }
 
     try:
+        vectors = knowledge_store.get_vectors()
+        vector_store["backend"] = vectors.label
         indexed, total = _indexed_chunks_by_source()
         vector_store["total_chunks"] = total
     except Exception as error:
@@ -108,51 +108,58 @@ def get_knowledge_base():
         vector_store["available"] = False
         vector_store["error"] = type(error).__name__
 
+    try:
+        registered = {row["name"]: row for row in knowledge_store.list_documents()}
+    except Exception:
+        registered = {}
+
     documents = []
-    seen_sources = set()
 
+    def entry(name, extension, size_bytes, modified_at, row):
+        indexed_chunks = indexed.get(name, 0)
+        expected = row["chunks"] if row else None
+        if indexed_chunks == 0:
+            status = "not_indexed"
+        elif expected is not None and indexed_chunks != expected:
+            status = "outdated"
+        else:
+            status = "indexed"
+        origin = row["origin"] if row else "bundled"
+        return {
+            "name": name,
+            "type": DOCUMENT_TYPES.get(extension, extension.lstrip(".").upper() or "File"),
+            "extension": extension,
+            "size_bytes": size_bytes,
+            "modified_at": modified_at,
+            "indexed_chunks": indexed_chunks,
+            "expected_chunks": expected,
+            "status": status,
+            "supported": True,
+            "origin": origin,
+            "module": row["module"] if row else knowledge_store.bundled_module(name),
+            # Authors are never sent to the browser: only whether it is the current user
+            "can_delete": bool(row and origin == "uploaded" and user and row["uploaded_by"] == user)
+        }
+
+    # Shipped files (also listed before their first indexing)
     if DOCUMENTS_PATH.exists():
-        for file_path in sorted(DOCUMENTS_PATH.iterdir()):
-
-            if not file_path.is_file():
-                continue
-
+        for file_path in sorted(DOCUMENTS_PATH.glob("*.txt")):
             stat = file_path.stat()
-            extension = file_path.suffix.lower()
-            indexed_chunks = indexed.get(file_path.name, 0)
+            documents.append(entry(file_path.name, ".txt", stat.st_size, _iso(stat.st_mtime),
+                                   registered.get(file_path.name)))
+    shipped = {d["name"] for d in documents}
 
-            # Expected chunk count with the same splitter as the indexer
-            expected_chunks = None
-            if extension == ".txt":
-                expected_chunks = len(
-                    split_text(file_path.read_text(encoding="utf-8"))
-                )
+    # Documents added from the UI
+    for name, row in registered.items():
+        if name not in shipped and row["origin"] == "uploaded":
+            documents.append(entry(name, Path(name).suffix.lower(), row["size_bytes"], row["created_at"], row))
 
-            if indexed_chunks == 0:
-                status = "not_indexed"
-            elif expected_chunks is not None and indexed_chunks != expected_chunks:
-                status = "outdated"
-            else:
-                status = "indexed"
-
-            seen_sources.add(file_path.name)
-            documents.append({
-                "name": file_path.name,
-                "type": DOCUMENT_TYPES.get(extension, extension.lstrip(".").upper() or "File"),
-                "extension": extension,
-                "size_bytes": stat.st_size,
-                "modified_at": _iso(stat.st_mtime),
-                "indexed_chunks": indexed_chunks,
-                "expected_chunks": expected_chunks,
-                "status": status,
-                "supported": extension == ".txt"
-            })
-
-    # Chunks still present in ChromaDB whose source file no longer exists
+    known = {d["name"] for d in documents}
+    # Chunks still in the vector store whose document is gone
     orphan_sources = [
         {"name": source, "indexed_chunks": count}
         for source, count in sorted(indexed.items())
-        if source not in seen_sources
+        if source not in known
     ]
 
     return {
@@ -164,6 +171,7 @@ def get_knowledge_base():
         "summary": {
             "document_count": len(documents),
             "indexed_documents": sum(1 for d in documents if d["status"] == "indexed"),
+            "uploaded_documents": sum(1 for d in documents if d["origin"] == "uploaded"),
             "total_chunks": vector_store["total_chunks"]
         }
     }
@@ -202,6 +210,7 @@ def _vector_store_status():
         _, total = _indexed_chunks_by_source()
         return {
             "available": True,
+            "backend": knowledge_store.get_vectors().label,
             "collection": COLLECTION_NAME,
             "total_chunks": total,
             "embedding_model": embedding_model_name(),
@@ -210,6 +219,7 @@ def _vector_store_status():
     except Exception as error:
         return {
             "available": False,
+            "backend": None,
             "collection": COLLECTION_NAME,
             "total_chunks": 0,
             "embedding_model": embedding_model_name(),

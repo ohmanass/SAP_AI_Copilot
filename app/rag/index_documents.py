@@ -1,27 +1,19 @@
+"""
+Index the documents shipped in data/documents (python -m app.rag.index_documents).
 
-from app.rag.document_loader import load_and_split_documents
-from app.rag.vector_store import SAPVectorStore
+New or changed files are embedded, unchanged ones are skipped. The backend also
+runs this synchronisation at startup, so running it by hand is optional.
+"""
+
+from app.rag.knowledge_store import sync_bundled
+from app.storage import chat_store
 
 
 def index_documents():
-    store = SAPVectorStore()
-
-    documents = load_and_split_documents()
-
-    print(f"Nombre de chunks à indexer : {len(documents)}")
-
-    for document in documents:
-        store.add_document(
-            document_id=document["id"],
-            text=document["content"],
-            metadata={
-                "source": document["source"],
-                "chunk_index": document["chunk_index"]
-            }
-        )
-
-        print(f"Indexed: {document['id']}")
-
+    chat_store.initialize()
+    actions = sync_bundled()
+    for name, action in actions.items():
+        print(f"{action:>9}  {name}")
     print("\nIndexation terminée !")
 
 

@@ -3,9 +3,11 @@ sap.ui.define([
 	"sap/ui/model/json/JSONModel",
 	"sap/ui/core/EventBus",
 	"sap/m/MessageToast",
+	"sap/m/MessageBox",
 	"../util/Markdown",
-	"../util/DataTable"
-], (BaseController, JSONModel, EventBus, MessageToast, Markdown, DataTable) => {
+	"../util/DataTable",
+	"../util/KnowledgeDialog"
+], (BaseController, JSONModel, EventBus, MessageToast, MessageBox, Markdown, DataTable, KnowledgeDialog) => {
 	"use strict";
 
 	const TOOL_ICONS = {
@@ -689,6 +691,31 @@ sap.ui.define([
 			if (key === this._conversationKey) {
 				this._updateUploading();
 				this._focusInput();
+			}
+		},
+
+		/** Adds a document sent in this conversation to the knowledge base of a workspace. */
+		async onAttachmentToKnowledge(event) {
+			const attachment = event.getSource().getBindingContext("chat").getObject();
+			const sessionId = this._chat().getProperty("/sessionId");
+			if (!sessionId || !attachment.id) {
+				return;
+			}
+			await this.getOwnerComponent().refreshModules();
+			const choice = await KnowledgeDialog.open(this, {
+				documentName: attachment.name,
+				module: this._chat().getProperty("/module") || ""
+			});
+			if (!choice) {
+				return;
+			}
+			MessageToast.show(this.getText("kbAdding", [attachment.name]));
+			try {
+				const document = await this.getService().addKnowledgeFromAttachment(sessionId, attachment.id, choice.module);
+				MessageToast.show(this.getText("kbAdded", [document.name, document.chunks]));
+				this.getOwnerComponent().refreshModules();
+			} catch (error) {
+				MessageBox.error(this.getText("kbAddFailed", [error.detail || this.describeError(error)]));
 			}
 		},
 

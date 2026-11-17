@@ -167,11 +167,14 @@ def get_module(key):
     return module
 
 
-def describe_modules(indexed_chunks_by_source: dict):
-    """Module list for the frontend, with live documentation counts."""
+def describe_modules(indexed_chunks_by_source: dict, added_documents: dict | None = None):
+    """Module list for the frontend, with live documentation counts (shipped and added documents)."""
 
     result = []
     for module in MODULES:
+        sources = list(module.doc_sources) + [
+            name for name in (added_documents or {}).get(module.key, []) if name not in module.doc_sources
+        ]
         result.append({
             "key": module.key,
             "code": module.code,
@@ -183,9 +186,9 @@ def describe_modules(indexed_chunks_by_source: dict):
             "apis": list(module.apis),
             "documents": [
                 {"name": source, "chunks": indexed_chunks_by_source.get(source, 0)}
-                for source in module.doc_sources
+                for source in sources
             ],
-            "indexed_chunks": sum(indexed_chunks_by_source.get(s, 0) for s in module.doc_sources),
+            "indexed_chunks": sum(indexed_chunks_by_source.get(s, 0) for s in sources),
             "requires_s4hana": module.requires_s4hana,
             "suggestions": [
                 {"text": text, "hint": hint, "icon": icon}
