@@ -757,13 +757,68 @@ html, body.cpBody {
 	white-space: pre;
 }
 
-.cpCodeLang {
+/* Code block: the bar stays in place when the code scrolls horizontally */
+.cpCodeBlock {
+	position: relative;
+}
+
+.cpCodeBlock pre {
+	padding-top: 2rem;
+}
+
+/* Language label and copy button, above the code */
+.cpCodeBar {
 	position: absolute;
-	top: 0.375rem;
-	right: 0.625rem;
+	z-index: 1;
+	top: 0.8125rem; /* pre margin-top + 0.3125rem */
+	right: 0.375rem;
+	display: flex;
+	align-items: center;
+	gap: 0.375rem;
+}
+
+.cpCodeLang {
 	font-family: var(--cp-mono);
 	font-size: 0.6875rem;
 	color: var(--cp-muted);
+}
+
+.cpCopyCode {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.75rem;
+	height: 1.5rem;
+	padding: 0;
+	border: 1px solid var(--cp-border);
+	border-radius: 6px;
+	background: rgba(148, 163, 184, 0.08);
+	color: var(--cp-muted);
+	cursor: pointer;
+	transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.cpCopyCode::before {
+	content: "\e245"; /* sap-icon://copy */
+	font-family: "SAP-icons";
+	font-size: 0.8125rem;
+	line-height: 1;
+}
+
+.cpCopyCode:hover,
+.cpCopyCode:focus-visible {
+	color: var(--cp-cyan-soft);
+	background: rgba(148, 163, 184, 0.18);
+	outline: none;
+}
+
+.cpCopyCode.cpCopied {
+	color: #4ade80;
+	border-color: rgba(74, 222, 128, 0.5);
+}
+
+.cpCopyCode.cpCopied::before {
+	content: "\e05b"; /* sap-icon://accept */
 }
 
 .cpMarkdown blockquote {

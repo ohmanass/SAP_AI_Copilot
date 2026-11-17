@@ -91,6 +91,10 @@ sap.ui.define([
 			// Enter sends, Shift + Enter inserts a line break
 			this.byId("input").attachBrowserEvent("keydown", this._onInputKeyDown, this);
 
+			// Copy buttons of the code blocks in the answers (markup built by util/Markdown.js)
+			Markdown.setLabels({ copyCode: this.getText("copyCode") });
+			this.byId("scroller").attachBrowserEvent("click", this._onCodeCopyClick, this);
+
 			// Keep the latest message in view whenever the thread is re-rendered
 			const scrollDelegate = { onAfterRendering: () => this._scrollToBottom() };
 			this.byId("thread").addEventDelegate(scrollDelegate);
@@ -543,6 +547,24 @@ sap.ui.define([
 			try {
 				await navigator.clipboard.writeText(content);
 				MessageToast.show(this.getText("copied"));
+			} catch (error) {
+				MessageToast.show(this.getText("copyFailed"));
+			}
+		},
+
+		async _onCodeCopyClick(event) {
+			const button = event.target.closest && event.target.closest(".cpCopyCode");
+			const block = button && button.closest(".cpCodeBlock");
+			const code = block && block.querySelector("code");
+			if (!code) {
+				return;
+			}
+			try {
+				await navigator.clipboard.writeText(code.textContent);
+				button.classList.add("cpCopied");
+				clearTimeout(button._copiedTimer);
+				button._copiedTimer = setTimeout(() => button.classList.remove("cpCopied"), 1500);
+				MessageToast.show(this.getText("codeCopied"));
 			} catch (error) {
 				MessageToast.show(this.getText("copyFailed"));
 			}

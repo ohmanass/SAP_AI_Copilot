@@ -134,7 +134,10 @@ sap.ui.define([], () => {
 				}
 				i++; // closing fence
 				const language = fence[1] ? `<span class="cpCodeLang">${escapeHtml(fence[1])}</span>` : "";
-				out.push(`<pre>${language}<code>${escapeHtml(code.join("\n"))}</code></pre>`);
+				// Copy button: handled by a delegated click listener (see Chat controller)
+				const copy = `<button type="button" class="cpCopyCode" title="${escapeHtml(labels.copyCode)}"></button>`;
+				out.push(`<div class="cpCodeBlock"><span class="cpCodeBar">${language}${copy}</span>` +
+					`<pre><code>${escapeHtml(code.join("\n"))}</code></pre></div>`);
 				continue;
 			}
 
@@ -215,5 +218,12 @@ sap.ui.define([], () => {
 		return `<div class="cpMarkdown">${out.join("")}</div>`;
 	}
 
-	return { render, escapeHtml };
+	/** Translated texts used in the generated markup (set by the app at startup). */
+	const labels = { copyCode: "Copy code" };
+
+	function setLabels(texts) {
+		Object.assign(labels, texts);
+	}
+
+	return { render, escapeHtml, setLabels };
 });

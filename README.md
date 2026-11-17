@@ -27,7 +27,7 @@ L'application fonctionne en local et se déploie sur **SAP BTP (Cloud Foundry)**
 ### Interface SAPUI5
 
 - Réponses en streaming : l'outil en cours d'exécution s'affiche en direct (« Reading purchase order data », « Searching the knowledge base »), puis le texte apparaît progressivement. Un bouton **Stop** interrompt la génération sans rien enregistrer
-- Chat : envoi avec Entrée, retour à la ligne avec Shift + Entrée, indicateur de génération, rendu Markdown, copie des réponses, gestion des erreurs avec bouton « Réessayer »
+- Chat : envoi avec Entrée, retour à la ligne avec Shift + Entrée, indicateur de génération, rendu Markdown, copie des réponses et bouton « Copier » sur chaque bloc de code (CDS views, ABAP, commandes…), gestion des erreurs avec bouton « Réessayer »
 - Sources RAG affichées sous chaque réponse, avec l'extrait réellement récupéré dans la base vectorielle et sa distance
 - Outils utilisés par l'agent affichés pour chaque réponse
 - **Tableaux Fiori** sous la réponse pour les données SAP (commandes d'achat, commandes clients, factures fournisseurs et rapprochement à trois) : en-tête du document, postes, montants, dates, statuts colorés, jours de retard, blocages de paiement. Les tableaux sont construits par le backend à partir des résultats des outils, jamais à partir du texte du modèle. Un clic sur une ligne d'une liste ouvre l'analyse du document. Les colonnes secondaires sont masquées quand la place manque
