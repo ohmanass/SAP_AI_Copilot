@@ -232,8 +232,11 @@ python -m app.database.seed
 # Indexation de la documentation livrée (facultatif : le backend la fait au démarrage)
 python -m app.rag.index_documents
 
-uvicorn app.api:app --reload --port 8000
+# Backend sur le port 8000, redémarré automatiquement à chaque modification de app/
+.\dev-backend.ps1
 ```
+
+`dev-backend.ps1` (`scripts/dev_server.py`) remplace `uvicorn --reload`. Sous Windows, `--reload` arrête l'ancien serveur par un Ctrl+C puis l'attend sans limite de temps : si l'événement se perd, le rechargement reste bloqué sur « Reloading... » et l'ancien code continue de tourner. `watchfiles` arrête l'ancien serveur avec une limite de temps et redémarre toujours le nouveau, en 2 secondes environ. Seul un changement de `.env` ou des dépendances demande de relancer le script.
 
 ### Frontend
 
