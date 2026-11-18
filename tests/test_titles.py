@@ -49,6 +49,7 @@ def test_attachment_names_are_given_to_the_model(monkeypatch):
 class Agent:
     module = None
     owner = "local"
+    tools = []
 
     def ask_stream(self, message):
         yield {"type": "token", "content": "Here they are."}

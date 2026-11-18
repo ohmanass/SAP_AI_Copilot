@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app import auth, system_info
-from app.agent import titles
+from app.agent import followups, titles
 from app.agent.agent import SAPAgent
 from app.attachments import extract as attachment_extract
 from app.attachments import reader as attachment_reader
@@ -118,6 +118,8 @@ class ChatResponse(BaseModel):
     message_id: int | None = None
     # Title written by the model for a new conversation (None: provisional title kept)
     title: str | None = None
+    # Follow-up questions suggested by the model (may be empty)
+    suggestions: list[str] = []
 
 
 def check_session_owner(session_id: str, owner: str):
@@ -178,6 +180,12 @@ def start_title(session_id, owner, request, attachments):
     return titles.start(request.message, [a["name"] for a in attachments])
 
 
+def start_followups(agent, request, answer, tables=None):
+    """Follow-up questions for this answer, limited to the tools of the agent's workspace (Future)."""
+    workspace = f"{agent.module.code} - {agent.module.name}" if agent.module else ""
+    return followups.start(request.message, answer, agent.tools, workspace, tables)
+
+
 def save_title(future, session_id, owner, request):
     """Store the generated title (unless renamed meanwhile); returns it, or None."""
     title = titles.result(future)
@@ -222,6 +230,7 @@ def chat(request: ChatRequest, user: str = Depends(current_user)):
 
         with lock:
             result = agent.ask_with_details(request.message + attachment_reader.note(attachments))
+        followups_future = start_followups(agent, request, result["response"], result["tables"])
 
         message_id = save_exchange_safely(
             session_id=session_id,
@@ -243,7 +252,8 @@ def chat(request: ChatRequest, user: str = Depends(current_user)):
             module=module_key(agent),
             tables=result["tables"],
             message_id=message_id,
-            title=save_title(title_future, session_id, user, request) if message_id else None
+            title=save_title(title_future, session_id, user, request) if message_id else None,
+            suggestions=followups.result(followups_future)
         )
 
     except Exception as error:
@@ -264,6 +274,7 @@ def chat_stream(request: ChatRequest, user: str = Depends(current_user)):
       token        {"type", "content"}
       done         {"type", "session_id", "response", "sources", "tools_used", "tables", "message_id"}
       title        {"type", "session_id", "title"}   new conversation: title written by the model
+      suggestions  {"type", "message_id", "items"}   follow-up questions for this answer (after "done")
       error        {"type", "message"}
     """
 
@@ -278,6 +289,7 @@ def chat_stream(request: ChatRequest, user: str = Depends(current_user)):
     def generate():
         yield event_line({"type": "session", "session_id": session_id, "module": module_key(agent)})
         saved = False
+        answer = None
 
         with lock:
             try:
@@ -299,6 +311,7 @@ def chat_stream(request: ChatRequest, user: str = Depends(current_user)):
                         attachments=attachments
                     )
                     saved = message_id is not None
+                    answer = (event["response"], message_id, event["tables"])
                     yield event_line({**event, "session_id": session_id, "module": module_key(agent),
                                       "message_id": message_id})
 
@@ -310,10 +323,16 @@ def chat_stream(request: ChatRequest, user: str = Depends(current_user)):
                 })
 
         # After the answer, outside the conversation lock: the answer is already on screen
+        if answer is None:
+            return
+        followups_future = start_followups(agent, request, answer[0], answer[2])
         if saved and title_future is not None:
             title = save_title(title_future, session_id, user, request)
             if title:
                 yield event_line({"type": "title", "session_id": session_id, "title": title})
+        suggestions = followups.result(followups_future)
+        if suggestions:
+            yield event_line({"type": "suggestions", "message_id": answer[1], "items": suggestions})
 
     return StreamingResponse(
         generate(),

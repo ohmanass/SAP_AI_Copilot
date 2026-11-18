@@ -349,6 +349,12 @@ sap.ui.define([
 			this._stream = stream;
 			this._abortController = new AbortController();
 
+			// Suggestions belong to the latest answer only
+			chat.getProperty("/messages").forEach((message, i) => {
+				if (message.suggestions && message.suggestions.length) {
+					chat.setProperty(`/messages/${i}/suggestions`, []);
+				}
+			});
 			this._append({ role: "user", content: text, attachments });
 			chat.setProperty("/draft", "");
 			chat.setProperty("/attachments", []);
@@ -421,6 +427,17 @@ sap.ui.define([
 					stream.received += event.content;
 					this._ensureStreamMessage(stream);
 					this._startReveal(stream);
+					break;
+				case "suggestions":
+					// Follow-up questions, after the answer
+					stream.suggestions = event.items || [];
+					if (stream.index >= 0) {
+						const followBottom = this._isNearBottom();
+						chat.setProperty(`/messages/${stream.index}/suggestions`, stream.suggestions);
+						if (followBottom) {
+							setTimeout(() => this._scrollToBottom(), 50);
+						}
+					}
 					break;
 				case "title":
 					// New conversation: title written by the model, after the answer
@@ -506,7 +523,8 @@ sap.ui.define([
 				sources: done.sources,
 				tools_used: done.tools_used,
 				tables: done.tables,
-				id: done.message_id
+				id: done.message_id,
+				suggestions: stream.suggestions || []
 			}));
 
 			if (!stream.sessionId) {
@@ -597,6 +615,15 @@ sap.ui.define([
 			} else {
 				ConversationExport.downloadMarkdown(this, conversation);
 				MessageToast.show(this.getText("exportDone"));
+			}
+		},
+
+		/* ======================= Follow-up suggestions ======================= */
+
+		onSuggestionPress(event) {
+			const text = event.getSource().getBindingContext("chat").getObject();
+			if (typeof text === "string" && text) {
+				this._send(text);
 			}
 		},
 
@@ -771,6 +798,8 @@ sap.ui.define([
 				})),
 				tables: raw.tables || [],
 				attachments: raw.attachments || [],
+				// Follow-up questions (only for the latest answer, never stored)
+				suggestions: raw.suggestions || [],
 				// Stored answer: id for the feedback, and the user's rating (1, -1 or 0)
 				id: raw.id || null,
 				rating: raw.feedback ? raw.feedback.rating : 0,

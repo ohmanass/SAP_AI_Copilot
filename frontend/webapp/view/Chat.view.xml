@@ -193,6 +193,21 @@
 												visible="{= ${chat>role} === 'assistant' &amp;&amp; !!${chat>id} }"
 												press=".onFeedbackNotUseful"/>
 										</HBox>
+
+										<!-- Follow-up questions suggested by the model (latest answer only) -->
+										<HBox
+											class="cpFollowups"
+											renderType="Bare"
+											wrap="Wrap"
+											visible="{= ${chat>role} === 'assistant' &amp;&amp; !${chat>streaming} &amp;&amp; !!${chat>suggestions} &amp;&amp; ${chat>suggestions}.length > 0 &amp;&amp; !${chat>/busy} }"
+											items="{path: 'chat>suggestions', templateShareable: false}">
+											<Button
+												text="{chat>}"
+												icon="sap-icon://feeder-arrow"
+												type="Transparent"
+												class="cpFollowup"
+												press=".onSuggestionPress"/>
+										</HBox>
 									</VBox>
 								</HBox>
 							</items>

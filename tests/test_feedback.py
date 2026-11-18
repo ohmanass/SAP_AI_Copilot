@@ -141,6 +141,7 @@ def test_streamed_answer_carries_its_message_id(store, monkeypatch):
     class Agent:
         module = None
         owner = "local"
+        tools = []
 
         def ask_stream(self, message):
             yield {"type": "token", "content": "Hello"}
