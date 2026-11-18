@@ -374,6 +374,9 @@ sap.ui.define([
 					);
 					onEvent({ type: "token", content: result.response });
 					onEvent(Object.assign({ type: "done" }, result));
+					if (result.title) {
+						onEvent({ type: "title", session_id: result.session_id, title: result.title });
+					}
 				}
 
 				if (!stream.done) {
@@ -418,6 +421,14 @@ sap.ui.define([
 					stream.received += event.content;
 					this._ensureStreamMessage(stream);
 					this._startReveal(stream);
+					break;
+				case "title":
+					// New conversation: title written by the model, after the answer
+					stream.title = event.title;
+					if (chat.getProperty("/sessionId") === event.session_id) {
+						chat.setProperty("/title", event.title);
+					}
+					this.getOwnerComponent().refreshConversations();
 					break;
 				case "done":
 					stream.done = event;
@@ -501,7 +512,7 @@ sap.ui.define([
 			if (!stream.sessionId) {
 				chat.setProperty("/draftSessionId", null);
 				chat.setProperty("/sessionId", done.session_id);
-				chat.setProperty("/title", this._buildTitle(stream.text));
+				chat.setProperty("/title", stream.title || this._buildTitle(stream.text));
 				this.getModel("app").setProperty("/activeSessionId", done.session_id);
 				this.getRouter().navTo("conversation", { sessionId: done.session_id }, true);
 			}

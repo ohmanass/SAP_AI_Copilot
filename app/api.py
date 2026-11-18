@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app import auth, system_info
+from app.agent import titles
 from app.agent.agent import SAPAgent
 from app.attachments import extract as attachment_extract
 from app.attachments import reader as attachment_reader
@@ -115,6 +116,8 @@ class ChatResponse(BaseModel):
     tables: list[dict] = []
     # Id of the stored answer (feedback); None when the history is unavailable
     message_id: int | None = None
+    # Title written by the model for a new conversation (None: provisional title kept)
+    title: str | None = None
 
 
 def check_session_owner(session_id: str, owner: str):
@@ -165,6 +168,29 @@ def module_key(agent):
     return agent.module.key if agent.module else None
 
 
+def start_title(session_id, owner, request, attachments):
+    """New conversation: the model writes its title in parallel with the answer (Future or None)."""
+    try:
+        if chat_store.conversation_exists(session_id, owner):
+            return None
+    except chat_store.StoreUnavailable:
+        return None         # the title could not be saved anyway
+    return titles.start(request.message, [a["name"] for a in attachments])
+
+
+def save_title(future, session_id, owner, request):
+    """Store the generated title (unless renamed meanwhile); returns it, or None."""
+    title = titles.result(future)
+    if not title:
+        return None
+    try:
+        if chat_store.set_generated_title(session_id, owner, title, chat_store.build_title(request.message)):
+            return chat_store.build_title(title)
+    except chat_store.StoreUnavailable as error:
+        logger.warning("Generated title not saved: %s", error)
+    return None
+
+
 def message_attachments(session_id, owner, request):
     """Summaries of the documents sent with a message (only this user's documents of this conversation)."""
     if not request.attachments:
@@ -192,6 +218,7 @@ def chat(request: ChatRequest, user: str = Depends(current_user)):
 
     try:
         attachments = message_attachments(session_id, user, request)
+        title_future = start_title(session_id, user, request, attachments)
 
         with lock:
             result = agent.ask_with_details(request.message + attachment_reader.note(attachments))
@@ -215,7 +242,8 @@ def chat(request: ChatRequest, user: str = Depends(current_user)):
             tools_used=result["tools_used"],
             module=module_key(agent),
             tables=result["tables"],
-            message_id=message_id
+            message_id=message_id,
+            title=save_title(title_future, session_id, user, request) if message_id else None
         )
 
     except Exception as error:
@@ -235,18 +263,21 @@ def chat_stream(request: ChatRequest, user: str = Depends(current_user)):
       tool_end     {"type", "name", "success"}
       token        {"type", "content"}
       done         {"type", "session_id", "response", "sources", "tools_used", "tables", "message_id"}
+      title        {"type", "session_id", "title"}   new conversation: title written by the model
       error        {"type", "message"}
     """
 
     session_id = request.session_id or str(uuid4())
     agent, lock = get_session(session_id, user, request.module)
     attachments = message_attachments(session_id, user, request)
+    title_future = start_title(session_id, user, request, attachments)
 
     def event_line(event):
         return json.dumps(event, ensure_ascii=False) + "\n"
 
     def generate():
         yield event_line({"type": "session", "session_id": session_id, "module": module_key(agent)})
+        saved = False
 
         with lock:
             try:
@@ -267,6 +298,7 @@ def chat_stream(request: ChatRequest, user: str = Depends(current_user)):
                         tables=event["tables"],
                         attachments=attachments
                     )
+                    saved = message_id is not None
                     yield event_line({**event, "session_id": session_id, "module": module_key(agent),
                                       "message_id": message_id})
 
@@ -276,6 +308,12 @@ def chat_stream(request: ChatRequest, user: str = Depends(current_user)):
                     "type": "error",
                     "message": "An error occurred while processing your request."
                 })
+
+        # After the answer, outside the conversation lock: the answer is already on screen
+        if saved and title_future is not None:
+            title = save_title(title_future, session_id, user, request)
+            if title:
+                yield event_line({"type": "title", "session_id": session_id, "title": title})
 
     return StreamingResponse(
         generate(),

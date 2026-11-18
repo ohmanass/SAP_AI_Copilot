@@ -31,3 +31,14 @@ def local_sap_connection(monkeypatch):
     monkeypatch.setattr(connection, "_connection", None)
     yield
     connection._connection = None
+
+
+@pytest.fixture(autouse=True)
+def no_title_model(monkeypatch):
+    """Conversation titles are never asked to the real model (tests replace it when they need one)."""
+    from app.agent import titles
+
+    def offline(message):
+        raise RuntimeError("no model in the offline tests")
+
+    monkeypatch.setattr(titles, "_ask_model", offline)

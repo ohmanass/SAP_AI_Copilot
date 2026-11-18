@@ -216,6 +216,26 @@ def get_conversation(session_id: str, owner: str):
     return result
 
 
+def conversation_exists(session_id: str, owner: str) -> bool:
+    with _database().cursor() as cursor:
+        return cursor.execute(
+            "SELECT session_id FROM conversations WHERE session_id = ? AND owner = ?", (session_id, owner)
+        ).fetchone() is not None
+
+
+def set_generated_title(session_id: str, owner: str, title: str, provisional: str) -> bool:
+    """
+    Replace the provisional title by the one written by the model, only if it is
+    still the provisional one (a title chosen by the user is never replaced).
+    """
+    with _database().cursor() as cursor:
+        cursor.execute(
+            "UPDATE conversations SET title = ? WHERE session_id = ? AND owner = ? AND title = ?",
+            (build_title(title), session_id, owner, provisional)
+        )
+        return cursor.rowcount > 0
+
+
 def rename_conversation(session_id: str, owner: str, title: str) -> bool:
     """Change a conversation title (normalised like generated titles)."""
 

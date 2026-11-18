@@ -149,6 +149,6 @@ def test_streamed_answer_carries_its_message_id(store, monkeypatch):
     monkeypatch.setattr(api, "get_session", lambda session_id, owner, module=None: (Agent(), threading.Lock()))
     client = TestClient(api.app)
     lines = client.post("/api/chat/stream", json={"message": "Hi", "session_id": SESSION}).text.splitlines()
-    done = json.loads(lines[-1])
+    done = next(event for event in map(json.loads, lines) if event["type"] == "done")
     assert done["type"] == "done" and isinstance(done["message_id"], int)
     assert chat_store.get_conversation(SESSION, "local")["messages"][1]["id"] == done["message_id"]
