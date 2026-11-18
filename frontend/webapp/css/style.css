@@ -2336,3 +2336,63 @@ html, body.cpBody {
 	flex: 1 1 16rem;
 	max-width: 26rem;
 }
+
+/* ---------------- Home dashboard (welcome screen) ---------------- */
+.cpDashboard {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+	gap: 0.75rem;
+	width: 100%;
+	margin: 1.5rem 0 0.5rem;
+}
+
+.cpDashTile {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	padding: 1rem 1.125rem 0.625rem;
+	border: 1px solid var(--cp-border);
+	border-radius: 14px;
+	background: var(--cp-surface);
+	text-align: start;
+}
+
+.cpDashHead {
+	display: flex;
+	gap: 0.5rem;
+}
+
+.cpDashIcon.sapUiIcon {
+	color: var(--cp-cyan);
+	font-size: 1rem;
+}
+
+.cpDashLabel.sapMText {
+	font-size: 0.8125rem;
+	color: var(--cp-text-2);
+}
+
+.cpDashValue.sapMText {
+	font-size: 1.75rem;
+	font-weight: 700;
+	color: var(--cp-text);
+}
+
+.cpDashTile[data-state="error"] .cpDashValue.sapMText {
+	color: var(--cp-muted);
+}
+
+.cpDashHint.sapMText {
+	font-size: 0.75rem;
+	color: var(--cp-muted);
+}
+
+.cpDashAction.sapMBtn {
+	align-self: flex-start;
+	margin-inline-start: -0.5rem;
+}
+
+.cpDashAction .sapMBtnContent,
+.cpDashAction .sapMBtnIcon {
+	color: var(--cp-cyan-soft);
+}

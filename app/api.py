@@ -517,6 +517,13 @@ def interface_translation(code: str, request: Request, user: str = Depends(curre
     return Response(content, media_type="text/plain; charset=utf-8", headers=headers)
 
 
+@app.get("/api/dashboard")
+def dashboard(refresh: bool = False, user: str = Depends(current_user)):
+    """Live SAP indicators of the home screen (cached 5 minutes)."""
+    from app import dashboard as home_dashboard
+    return home_dashboard.indicators(refresh)
+
+
 @app.get("/api/usage")
 def ai_usage(days: int = 30, user: str = Depends(current_user)):
     """Calls and tokens sent to SAP Generative AI Hub (counters only, every user)."""

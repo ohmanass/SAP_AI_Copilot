@@ -80,6 +80,8 @@ sap.ui.define([
 				title: this.getText("newConversationTitle"),
 				messages: [],
 				busy: false,
+				// Live SAP indicators of the welcome screen
+				dashboard: [],
 				pending: false,
 				activity: "",
 				loading: false,
@@ -113,6 +115,8 @@ sap.ui.define([
 			// Keep the latest message in view whenever the thread is re-rendered
 			const scrollDelegate = { onAfterRendering: () => this._scrollToBottom() };
 			this.byId("thread").addEventDelegate(scrollDelegate);
+
+			this._loadDashboard();
 			this.byId("pendingIndicator").addEventDelegate(scrollDelegate);
 		},
 
@@ -132,6 +136,7 @@ sap.ui.define([
 
 		_onNewChatEvent() {
 			this._startNewConversation(null);
+			this._loadDashboard();
 		},
 
 		_onNewChatRoute() {
@@ -617,6 +622,31 @@ sap.ui.define([
 				ConversationExport.downloadMarkdown(this, conversation);
 				MessageToast.show(this.getText("exportDone"));
 			}
+		},
+
+		/* ======================= Home dashboard ======================= */
+
+		/** Live SAP indicators of the welcome screen (cached 5 minutes by the backend). */
+		async _loadDashboard() {
+			try {
+				const data = await this.getService().getDashboard();
+				this._chat().setProperty("/dashboard", data.indicators || []);
+			} catch (error) {
+				this._chat().setProperty("/dashboard", []); // the welcome screen works without it
+			}
+		},
+
+		onDashboardPress(event) {
+			const key = event.getSource().getBindingContext("chat").getProperty("key");
+			this._send(this.getText(`dashboardPrompt.${key}`));
+		},
+
+		formatDashboardLabel(key) {
+			return key ? this.getText(`dashboard.${key}`) : "";
+		},
+
+		formatDashboardValue(value) {
+			return typeof value === "number" ? new Intl.NumberFormat(Language.locale()).format(value) : "—";
 		},
 
 		/* ======================= Follow-up suggestions ======================= */

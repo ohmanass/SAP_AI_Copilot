@@ -73,6 +73,11 @@ sap.ui.define([
 			return this._request("health", { timeoutMs: 5000 });
 		},
 
+		/** Live SAP indicators of the home screen. */
+		getDashboard() {
+			return this._request("dashboard", { timeoutMs: 60000 });
+		},
+
 		/** Calls and tokens sent to SAP Generative AI Hub over the last `days` days. */
 		getUsage(days) {
 			return this._request(`usage?days=${encodeURIComponent(days || 30)}`);

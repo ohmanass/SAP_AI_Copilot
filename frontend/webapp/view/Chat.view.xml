@@ -63,6 +63,35 @@
 							<Text
 								text="{parts: ['chat>/moduleInfo/description', 'i18n>welcomeText'], formatter: '.formatWelcomeText'}"
 								class="cpWelcomeText"/>
+
+							<!-- Live SAP indicators (general assistant only): a click asks for the analysis -->
+							<HBox
+								class="cpDashboard"
+								renderType="Bare"
+								visible="{= !${chat>/moduleInfo} &amp;&amp; ${chat>/dashboard}.length > 0 }"
+								items="{path: 'chat>/dashboard', templateShareable: false}">
+								<VBox class="cpDashTile" renderType="Bare">
+									<customData>
+										<core:CustomData key="state" value="{= ${chat>error} ? 'error' : 'ok' }" writeToDom="true"/>
+									</customData>
+									<HBox alignItems="Center" renderType="Bare" class="cpDashHead">
+										<core:Icon src="{chat>icon}" class="cpDashIcon"/>
+										<Text text="{path: 'chat>key', formatter: '.formatDashboardLabel'}" class="cpDashLabel"/>
+									</HBox>
+									<Text text="{path: 'chat>value', formatter: '.formatDashboardValue'}" class="cpDashValue"/>
+									<Text text="{= ${chat>error} ? ${i18n>dashboardUnavailable} : ${i18n>dashboardWindow} }" class="cpDashHint"/>
+									<Button
+										text="{i18n>dashboardAnalyse}"
+										icon="sap-icon://feeder-arrow"
+										iconFirst="false"
+										type="Transparent"
+										class="cpDashAction"
+										visible="{= !${chat>error} }"
+										enabled="{= !${chat>/busy} }"
+										press=".onDashboardPress"/>
+								</VBox>
+							</HBox>
+
 							<List
 								id="suggestions"
 								class="cpSuggestions"
