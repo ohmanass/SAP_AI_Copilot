@@ -8,10 +8,11 @@ sap.ui.define([
 	"../util/DataTable",
 	"../util/KnowledgeDialog",
 	"../util/ConversationExport",
+	"../util/Language",
 	"sap/m/Menu",
 	"sap/m/MenuItem"
 ], (BaseController, JSONModel, EventBus, MessageToast, MessageBox, Markdown, DataTable, KnowledgeDialog,
-	ConversationExport, Menu, MenuItem) => {
+	ConversationExport, Language, Menu, MenuItem) => {
 	"use strict";
 
 	const TOOL_ICONS = {
@@ -966,7 +967,7 @@ sap.ui.define([
 				parts.push(this.getText(pages === 1 ? "attachmentPage" : "attachmentPages", [pages]));
 			}
 			if (typeof chars === "number") {
-				parts.push(this.getText("attachmentChars", [new Intl.NumberFormat().format(chars)]));
+				parts.push(this.getText("attachmentChars", [new Intl.NumberFormat(Language.locale()).format(chars)]));
 			}
 			if (count) {
 				parts.push(this.getText(count === 1 ? "attachmentMaskedOne" : "attachmentMasked", [count]));

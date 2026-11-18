@@ -2320,3 +2320,19 @@ html, body.cpBody {
 	width: auto !important;
 	min-width: 4.5rem;
 }
+
+/* ---------------- Language (Settings) ---------------- */
+.cpLanguageCard.cpCard {
+	margin-bottom: 1rem;
+}
+
+.cpLanguageRow {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem 1rem;
+}
+
+.cpLanguageSelect.sapMSlt {
+	flex: 1 1 16rem;
+	max-width: 26rem;
+}

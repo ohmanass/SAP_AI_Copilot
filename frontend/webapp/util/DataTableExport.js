@@ -1,4 +1,6 @@
-sap.ui.define([], () => {
+sap.ui.define([
+	"./Language"
+], (Language) => {
 	"use strict";
 
 	/**
@@ -133,7 +135,7 @@ sap.ui.define([], () => {
 			if (!isEmpty(table.total)) {
 				items.push({ key: texts.text("dataExportTotal"), value: String(table.total) });
 			}
-			items.push({ key: texts.text("dataExportDate"), value: new Date().toLocaleString() });
+			items.push({ key: texts.text("dataExportDate"), value: new Date().toLocaleString(Language.locale()) });
 
 			const header = (table.attributes || []).map((attribute) => ({
 				key: texts.label(attribute.key),

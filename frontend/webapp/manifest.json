@@ -5,7 +5,7 @@
 		"type": "application",
 		"i18n": {
 			"bundleUrl": "i18n/i18n.properties",
-			"supportedLocales": [""],
+			"supportedLocales": ["", "fr", "de", "es"],
 			"fallbackLocale": ""
 		},
 		"title": "{{appTitle}}",
@@ -66,7 +66,7 @@
 				"type": "sap.ui.model.resource.ResourceModel",
 				"settings": {
 					"bundleName": "com.sapaicopilot.app.i18n.i18n",
-					"supportedLocales": [""],
+					"supportedLocales": ["", "fr", "de", "es"],
 					"fallbackLocale": ""
 				}
 			}

@@ -35,7 +35,7 @@ def local_sap_connection(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def no_side_model_calls(monkeypatch):
-    """Titles and follow-up suggestions never call the real model (tests replace it when they need one)."""
+    """Titles, follow-up suggestions and translations never call the real model (tests replace it when they need one)."""
     from app.agent import followups, titles
 
     def offline(content):
@@ -43,6 +43,13 @@ def no_side_model_calls(monkeypatch):
 
     monkeypatch.setattr(titles, "_ask_model", offline)
     monkeypatch.setattr(followups, "_ask_model", offline)
+
+    from app.i18n import translator
+
+    def offline_translation(language_name, texts):
+        raise RuntimeError("no model in the offline tests")
+
+    monkeypatch.setattr(translator, "_ask_model", offline_translation)
 
 
 @pytest.fixture(autouse=True)

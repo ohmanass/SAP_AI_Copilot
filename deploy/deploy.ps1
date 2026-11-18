@@ -180,6 +180,11 @@ robocopy (Join-Path $Root "data\documents") (Join-Path $DataBuild "documents") /
 if ($LASTEXITCODE -ge 8) { throw "robocopy data failed" }
 if (Test-Path (Join-Path $Root "data\sap.db")) { Copy-Item (Join-Path $Root "data\sap.db") $DataBuild }
 
+# --- Backend: English interface texts, source of the translations by the AI model (app/i18n) ---
+$I18nBuild = Join-Path $BackendBuild "ui_i18n"
+New-Item -ItemType Directory -Force $I18nBuild | Out-Null
+Copy-Item (Join-Path $Root "frontend\webapp\i18n\i18n.properties") $I18nBuild
+
 # --- Backend: requirements pinned to the versions tested locally ---
 $python = Join-Path $Root ".venv\Scripts\python.exe"
 $frozen = & $python -m pip freeze

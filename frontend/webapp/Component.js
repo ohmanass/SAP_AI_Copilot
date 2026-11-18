@@ -2,8 +2,10 @@ sap.ui.define([
 	"sap/ui/core/UIComponent",
 	"sap/ui/model/json/JSONModel",
 	"sap/ui/Device",
-	"./service/CopilotService"
-], (UIComponent, JSONModel, Device, CopilotService) => {
+	"sap/ui/model/resource/ResourceModel",
+	"./service/CopilotService",
+	"./util/Language"
+], (UIComponent, JSONModel, Device, ResourceModel, CopilotService, Language) => {
 	"use strict";
 
 	return UIComponent.extend("com.sapaicopilot.app.Component", {
@@ -14,6 +16,13 @@ sap.ui.define([
 		},
 
 		init() {
+			// Language translated by the AI model: its bundle (preloaded by boot.js) replaces
+			// the English texts before the root view is created
+			const machineBundle = Language.machineBundle();
+			if (machineBundle) {
+				this.setModel(new ResourceModel({ bundle: machineBundle }), "i18n");
+			}
+
 			UIComponent.prototype.init.apply(this, arguments);
 
 			const config = this.getManifestEntry("/sap.ui5/config/copilot");

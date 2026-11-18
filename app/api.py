@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app import auth, system_info
@@ -20,6 +20,8 @@ from app.agent.agent import SAPAgent
 from app.attachments import extract as attachment_extract
 from app.attachments import reader as attachment_reader
 from app.attachments import sensitive as attachment_sensitive
+from app.i18n import languages as ui_languages
+from app.i18n import translator as ui_translator
 from app.modules import MODULES, get_module
 from app.rag import knowledge_store
 from app.storage import chat_store, feedback_store
@@ -483,6 +485,36 @@ def add_knowledge_from_attachment(request: AttachmentToKnowledge, user: str = De
 def delete_knowledge_document(name: str, user: str = Depends(current_user)):
     knowledge_store.delete_document(name, user)
     return {"deleted": name}
+
+
+# ----------------------------------------------------------------------
+# Interface languages
+# ----------------------------------------------------------------------
+
+@app.get("/api/i18n/languages")
+def interface_languages():
+    """Reviewed languages (frontend files) and languages translated by the AI model."""
+    return ui_languages.catalogue()
+
+
+@app.get("/api/i18n/{code}.properties")
+def interface_translation(code: str, request: Request, user: str = Depends(current_user)):
+    """
+    SAPUI5 resource bundle of a language translated by the AI model (translated
+    once, then cached for every user). ETag: the browser reloads it only when it changed.
+    """
+    if not ui_languages.is_machine(code):
+        raise HTTPException(status_code=404, detail="No translation by the AI model for this language.")
+    try:
+        content = ui_translator.bundle_file(code)
+    except ui_translator.TranslationUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+    etag = '"' + ui_translator._hash(content)[:32] + '"'
+    headers = {"ETag": etag, "Cache-Control": "no-cache"}
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    return Response(content, media_type="text/plain; charset=utf-8", headers=headers)
 
 
 @app.get("/api/usage")

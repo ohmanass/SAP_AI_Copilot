@@ -20,6 +20,45 @@
 
 			<MessageStrip type="Error" showIcon="true" text="{settings>/error}" visible="{= !!${settings>/error} }" class="cpStrip"/>
 
+			<!-- Interface language (util/Language.js) -->
+			<VBox class="cpCard cpLanguageCard" renderType="Bare">
+				<HBox alignItems="Center" renderType="Bare" class="cpCardHeader">
+					<core:Icon src="sap-icon://globe" class="cpCardIcon"/>
+					<Title text="{i18n>languageTitle}" level="H3" class="cpCardTitle"/>
+				</HBox>
+				<HBox class="cpLanguageRow" alignItems="Center" renderType="Bare">
+					<Label text="{i18n>languageLabel}" labelFor="languageSelect" class="cpRowLabel"/>
+					<Select
+						id="languageSelect"
+						class="cpLanguageSelect"
+						selectedKey="{language>/selected}"
+						items="{path: 'language>/options', factory: '.createLanguageItem'}"
+						enabled="{= !${language>/busy} }"
+						busy="{language>/busy}"
+						busyIndicatorDelay="0"
+						change=".onLanguageChange"/>
+				</HBox>
+				<MessageStrip
+					type="Information"
+					showIcon="true"
+					text="{language>/progress}"
+					visible="{= !!${language>/progress} }"
+					class="cpStrip"/>
+				<MessageStrip
+					type="Error"
+					showIcon="true"
+					text="{language>/error}"
+					visible="{= !!${language>/error} }"
+					class="cpStrip"/>
+				<MessageStrip
+					type="Warning"
+					showIcon="true"
+					text="{i18n>languageMachineActive}"
+					visible="{language>/machine}"
+					class="cpStrip"/>
+				<Text text="{i18n>languageNote}" class="cpCardNote"/>
+			</VBox>
+
 			<!-- AI usage (app/llm/usage.py) -->
 			<VBox class="cpCard cpUsageCard" renderType="Bare" busy="{usage>/busy}" busyIndicatorDelay="0">
 				<HBox alignItems="Center" renderType="Bare" class="cpCardHeader cpUsageHeader">

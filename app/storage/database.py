@@ -135,6 +135,16 @@ CREATE TABLE IF NOT EXISTS ai_usage (
     completion_tokens INTEGER NOT NULL,
     PRIMARY KEY (usage_day, feature, model)
 );
+
+-- Interface translated by the AI model (app/i18n/translator.py): one row per
+-- language and text; translated is NULL when the translation failed the checks
+CREATE TABLE IF NOT EXISTS ui_translations (
+    language TEXT NOT NULL,
+    msg_key TEXT NOT NULL,
+    source_hash TEXT NOT NULL,
+    translated TEXT,
+    PRIMARY KEY (language, msg_key)
+);
 """
 
 # Columns added after the first versions of the SQLite file: (table, column, definition)
@@ -234,6 +244,14 @@ HANA_TABLES = {
             prompt_tokens BIGINT NOT NULL,
             completion_tokens BIGINT NOT NULL,
             PRIMARY KEY (usage_day, feature, model)
+        )""",
+    "UI_TRANSLATIONS": """
+        CREATE COLUMN TABLE ui_translations (
+            language NVARCHAR(10) NOT NULL,
+            msg_key NVARCHAR(200) NOT NULL,
+            source_hash NVARCHAR(64) NOT NULL,
+            translated NVARCHAR(4000),
+            PRIMARY KEY (language, msg_key)
         )""",
 }
 
