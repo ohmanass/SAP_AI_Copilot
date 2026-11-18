@@ -20,6 +20,75 @@
 
 			<MessageStrip type="Error" showIcon="true" text="{settings>/error}" visible="{= !!${settings>/error} }" class="cpStrip"/>
 
+			<!-- AI usage (app/llm/usage.py) -->
+			<VBox class="cpCard cpUsageCard" renderType="Bare" busy="{usage>/busy}" busyIndicatorDelay="0">
+				<HBox alignItems="Center" renderType="Bare" class="cpCardHeader cpUsageHeader">
+					<core:Icon src="sap-icon://measure" class="cpCardIcon"/>
+					<Title text="{i18n>usageTitle}" level="H3" class="cpCardTitle"/>
+					<SegmentedButton selectedKey="{usage>/days}" selectionChange=".onUsageDaysChange" class="cpUsageDays">
+						<items>
+							<SegmentedButtonItem key="7" text="{i18n>usageDays7}"/>
+							<SegmentedButtonItem key="30" text="{i18n>usageDays30}"/>
+							<SegmentedButtonItem key="90" text="{i18n>usageDays90}"/>
+						</items>
+					</SegmentedButton>
+				</HBox>
+				<Text text="{usage>/error}" class="cpCardNote" visible="{= !!${usage>/error} }"/>
+
+				<FlexBox class="cpUsageKpis" wrap="Wrap" renderType="Bare">
+					<VBox class="cpUsageKpi" renderType="Bare">
+						<Text text="{i18n>usageCalls}" class="cpKpiLabel"/>
+						<Text text="{path: 'usage>/data/total/calls', formatter: '.formatCount'}" class="cpKpiValue"/>
+					</VBox>
+					<VBox class="cpUsageKpi" renderType="Bare">
+						<Text text="{i18n>usageInputTokens}" class="cpKpiLabel"/>
+						<Text text="{path: 'usage>/data/total/prompt_tokens', formatter: '.formatCount'}" class="cpKpiValue"/>
+					</VBox>
+					<VBox class="cpUsageKpi" renderType="Bare">
+						<Text text="{i18n>usageOutputTokens}" class="cpKpiLabel"/>
+						<Text text="{path: 'usage>/data/total/completion_tokens', formatter: '.formatCount'}" class="cpKpiValue"/>
+					</VBox>
+					<VBox class="cpUsageKpi" renderType="Bare">
+						<Text text="{i18n>usageCost}" class="cpKpiLabel"/>
+						<Text text="{parts: ['usage>/data/total/cost', 'usage>/data/currency'], formatter: '.formatCost'}" class="cpKpiValue"/>
+						<Text text="{i18n>usageCostHint}" class="cpKpiHint" visible="{= !${usage>/data/currency} }"/>
+					</VBox>
+				</FlexBox>
+
+				<!-- Tokens per day: SVG built from numbers only (see formatUsageChart) -->
+				<core:HTML content="{path: 'usage>/data/by_day', formatter: '.formatUsageChart'}" sanitizeContent="false"/>
+
+				<Table
+					class="cpTable cpUsageTable"
+					items="{usage>/data/by_feature}"
+					noDataText="{i18n>usageNone}"
+					backgroundDesign="Transparent"
+					popinLayout="GridSmall">
+					<columns>
+						<Column><Text text="{i18n>usageColFeature}"/></Column>
+						<Column hAlign="End"><Text text="{i18n>usageCalls}"/></Column>
+						<Column hAlign="End" minScreenWidth="28rem" demandPopin="true"><Text text="{i18n>usageInputTokens}"/></Column>
+						<Column hAlign="End" minScreenWidth="28rem" demandPopin="true"><Text text="{i18n>usageOutputTokens}"/></Column>
+						<Column hAlign="End" visible="{= !!${usage>/data/currency} }"><Text text="{i18n>usageCost}"/></Column>
+					</columns>
+					<items>
+						<ColumnListItem>
+							<cells>
+								<VBox renderType="Bare">
+									<Text text="{path: 'usage>feature', formatter: '.formatFeature'}" class="cpUsageFeature"/>
+									<Text text="{path: 'usage>feature', formatter: '.formatFeatureHint'}" class="cpCardNote"/>
+								</VBox>
+								<Text text="{path: 'usage>calls', formatter: '.formatCount'}"/>
+								<Text text="{path: 'usage>prompt_tokens', formatter: '.formatCount'}"/>
+								<Text text="{path: 'usage>completion_tokens', formatter: '.formatCount'}"/>
+								<Text text="{parts: ['usage>cost', 'usage>/data/currency'], formatter: '.formatCost'}"/>
+							</cells>
+						</ColumnListItem>
+					</items>
+				</Table>
+				<Text text="{i18n>usageNote}" class="cpCardNote"/>
+			</VBox>
+
 			<FlexBox class="cpCardGrid" wrap="Wrap" renderType="Bare" busy="{settings>/busy}" busyIndicatorDelay="0">
 
 				<!-- Backend -->

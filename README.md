@@ -28,6 +28,7 @@ L'application fonctionne en local et se déploie sur **SAP BTP (Cloud Foundry)**
 
 - Réponses en streaming : l'outil en cours d'exécution s'affiche en direct (« Reading purchase order data », « Searching the knowledge base »), puis le texte apparaît progressivement. Un bouton **Stop** interrompt la génération sans rien enregistrer
 - Chat : envoi avec Entrée, retour à la ligne avec Shift + Entrée, indicateur de génération, rendu Markdown, copie des réponses et bouton « Copier » sur chaque bloc de code (CDS views, ABAP, commandes…), gestion des erreurs avec bouton « Réessayer »
+- **Suivi de la consommation IA** (page **Settings**) : appels et tokens envoyés à SAP Generative AI Hub sur 7, 30 ou 90 jours, par jour (graphique) et par fonction (réponses, suggestions, titres, images, base de connaissances, test de connexion). Chaque appel au modèle passe par `app/llm/usage.py`, qui ajoute ses tokens à une ligne par jour, fonction et modèle (table `ai_usage` : des compteurs, aucune question ni réponse), en arrière-plan : le suivi ne ralentit ni ne fait échouer aucun appel. Coût estimé si des prix sont configurés (voir *Données*)
 - **Questions de suivi suggérées** : sous la dernière réponse, 2 ou 3 boutons proposent la suite (« Vérifier les factures pour CorpInMotion Inc », « Comparer la commande 4500208640 avec les factures ») ; un clic envoie la question. Le modèle les écrit après la réponse, sans la ralentir (`app/agent/followups.py`), en ne proposant que ce que l'espace de travail sait faire (ses outils) et en reprenant les numéros de la réponse et de ses tableaux SAP ; une suggestion qui citerait un numéro absent de la réponse est écartée. Aucune suggestion après une salutation ou un remerciement
 - **Titres de conversation écrits par le modèle** : pour une nouvelle conversation, le modèle écrit un titre court (« Différence entre EKKO et EKPO », « Rapprochement à trois commande 4500043954 ») en parallèle de la réponse, sans la ralentir (`app/agent/titles.py`). Il remplace le titre provisoire (début de la question), jamais un titre choisi par l'utilisateur ; en cas d'erreur, le titre provisoire reste
 - **Avis sur les réponses** : 👍 / 👎 sous chaque réponse, avec un commentaire facultatif après un 👎 (« What was wrong? »), enregistrés dans l'historique (SAP HANA Cloud sur BTP). La page **Feedback** affiche le taux de satisfaction et les derniers avis, filtrables ; un avis peut être copié comme **cas d'évaluation** (`Case(...)` à coller dans `evals/agent_eval.py`) pour qu'une mauvaise réponse ne revienne pas. Chacun voit ses propres avis ; les utilisateurs ayant la collection de rôles **SAP AI Copilot Feedback Reviewer** (créée par `deploy.ps1`, à attribuer dans le cockpit BTP : *Security > Users*) voient ceux de tous les utilisateurs. Un avis est supprimé avec sa conversation
@@ -132,6 +133,7 @@ SAP_AI_Copilot/
 | `GET` | `/api/sessions/{id}` | Messages d'une conversation |
 | `DELETE` | `/api/sessions/{id}` | Supprime une conversation (et ses documents joints et avis) |
 | `PUT` / `DELETE` | `/api/sessions/{id}/messages/{message_id}/feedback` | Avis sur une réponse (`rating` 1 ou -1, `comment` facultatif) / suppression |
+| `GET` | `/api/usage?days=30` | Consommation IA : appels et tokens par fonction, par modèle et par jour |
 | `GET` | `/api/feedback?rating=` | Statistiques et derniers avis (de tous les utilisateurs pour un relecteur) |
 | `POST` | `/api/sessions/{id}/attachments` | Joint un document (multipart, champ `file`) ; la conversation peut ne pas encore exister. Renvoie l'`id`, le nom, le nombre de pages et de caractères |
 | `GET` | `/api/sessions/{id}/attachments` | Documents joints à une conversation |
@@ -258,6 +260,7 @@ L'application s'ouvre sur `http://localhost:8080/index.html`. Le serveur de dév
 `python -m pytest` lance les tests du backend. Ils simulent toutes les réponses externes (S/4HANA, Destination service) : ils tournent hors ligne, sans clé ni identifiants, en moins d'une seconde. Ils couvrent :
 
 - le **rapprochement à trois** : chaque statut, retours et annulations d'entrées, avoirs, factures annulées, débits ultérieurs, tolérance de prix, solde GR/IR, numéros de poste au format différent selon l'API ;
+- le **suivi de la consommation IA** : appels classiques et en flux (usage lu en fin de flux, réponse interrompue comptée), embeddings, une ligne par jour, fonction et modèle, rapport par fonction et par jour, coût seulement avec des prix configurés, aucune erreur de base ne fait échouer un appel. Les autres tests n'écrivent jamais de consommation ;
 - les **questions de suivi** (modèle simulé) : lecture de la réponse du modèle, au plus trois suggestions, jamais la question posée, numéro de document inventé ou secret écartés, seuls les outils de l'espace de travail décrits au modèle, données des tableaux SAP transmises, événement envoyé après la réponse ;
 - les **titres de conversation** (modèle simulé) : nettoyage de la réponse du modèle, secret masqué, titre envoyé après la réponse, seulement pour le premier message, jamais à la place d'un titre choisi par l'utilisateur, titre provisoire gardé en cas d'erreur ;
 - les **avis** : identifiant de la réponse renvoyé par le chat, avis enregistré, modifié, supprimé, visible dans l'historique, refusé sur la réponse d'un autre utilisateur ou sur une question, statistiques et filtre, périmètre utilisateur / relecteur, secrets masqués dans un commentaire, suppression avec la conversation ;
@@ -379,6 +382,13 @@ Supprime les deux applications (avec leurs routes) et les services `sap-ai-copil
 - **Mode `sqlite`** : les commandes d'achat, fournisseurs et articles sont **fictifs**, générés par `app/database/seed.py`.
 
 Les documents de `data/documents` servent de base documentaire au RAG.
+
+**Consommation IA** : la page Settings compte les tokens de chaque appel au modèle. SAP AI Core facture en unités de capacité selon le contrat, aucun prix n'est donc supposé. Pour afficher un coût estimé, renseigner les prix par million de tokens (entrée, sortie) dans `USAGE_PRICES`, dans `.env` en local, ou sur BTP :
+
+```powershell
+cf set-env sap-ai-copilot-backend USAGE_PRICES '{"currency": "EUR", "gpt-4o-mini": [0.15, 0.6], "text-embedding-3-large": [0.13]}'
+cf restart sap-ai-copilot-backend
+```
 
 ## Pistes d'évolution
 

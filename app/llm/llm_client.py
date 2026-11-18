@@ -1,7 +1,7 @@
 import os
 
 from dotenv import load_dotenv
-from gen_ai_hub.proxy.native.openai import chat
+from app.llm import usage
 
 load_dotenv()
 
@@ -19,7 +19,8 @@ class LLMClient:
         messages,
         tools=None,
         temperature=0,
-        stream=False
+        stream=False,
+        feature="chat"
     ):
 
         parameters = {
@@ -37,7 +38,8 @@ class LLMClient:
             # Returns an iterator of chunks instead of a single completion
             parameters["stream"] = True
 
-        return chat.completions.create(**parameters)
+        # Counted in the AI usage (app.llm.usage)
+        return usage.chat_completion(feature, **parameters)
 
     def generate_response(self, messages):
 

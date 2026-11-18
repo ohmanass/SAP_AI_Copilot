@@ -181,12 +181,13 @@ def get_knowledge_base(user=None):
 def _check_ai_connection():
     """Send a minimal completion to SAP Generative AI Hub and time it."""
 
-    from gen_ai_hub.proxy.native.openai import chat
+    from app.llm import usage
 
     started = time.perf_counter()
 
     try:
-        chat.completions.create(
+        usage.chat_completion(
+            "status",
             model_name=chat_model_name(),
             messages=[{"role": "user", "content": "ping"}],
             max_tokens=1,

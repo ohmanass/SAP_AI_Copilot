@@ -73,6 +73,11 @@ sap.ui.define([
 			return this._request("health", { timeoutMs: 5000 });
 		},
 
+		/** Calls and tokens sent to SAP Generative AI Hub over the last `days` days. */
+		getUsage(days) {
+			return this._request(`usage?days=${encodeURIComponent(days || 30)}`);
+		},
+
 		getStatus(checkAi) {
 			return this._request(checkAi ? "status?check_ai=true" : "status", {
 				timeoutMs: checkAi ? 60000 : this._requestTimeoutMs

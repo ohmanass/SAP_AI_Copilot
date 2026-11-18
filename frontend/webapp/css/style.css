@@ -2243,3 +2243,80 @@ html, body.cpBody {
 	font-size: 0.72rem;
 	color: #fcd34d;
 }
+
+/* ---------------- AI usage (Settings) ---------------- */
+.cpUsageCard.cpCard {
+	margin-bottom: 1rem;
+}
+
+.cpUsageHeader {
+	flex-wrap: wrap;
+	gap: 0.625rem;
+}
+
+.cpUsageHeader .cpCardTitle {
+	flex: 1 1 auto;
+}
+
+.cpUsageKpis {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+	gap: 0.75rem;
+}
+
+.cpUsageKpi {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	padding: 0.75rem 0.875rem;
+	border: 1px solid var(--cp-border);
+	border-radius: 12px;
+	background: rgba(14, 25, 44, 0.5);
+}
+
+.cpUsageChart svg {
+	display: block;
+	width: 100%;
+	height: 7.5rem;
+}
+
+.cpUsageSlot {
+	fill: rgba(148, 163, 184, 0.06);
+}
+
+.cpUsageBar {
+	fill: var(--cp-cyan);
+	opacity: 0.85;
+}
+
+.cpUsageChart g:hover .cpUsageBar {
+	opacity: 1;
+}
+
+.cpUsageChart g:hover .cpUsageSlot {
+	fill: rgba(148, 163, 184, 0.14);
+}
+
+.cpUsageAxis {
+	display: flex;
+	justify-content: space-between;
+	margin-top: 0.25rem;
+	font-size: 0.6875rem;
+	color: var(--cp-muted);
+}
+
+.cpUsageFeature.sapMText {
+	font-weight: 600;
+	color: var(--cp-text);
+}
+
+/* Period buttons: sized to their text (UI5 gives equal, too narrow widths here) */
+.cpUsageDays.sapMSegB {
+	width: auto !important;
+	flex: none;
+}
+
+.cpUsageDays .sapMSegBBtn {
+	width: auto !important;
+	min-width: 4.5rem;
+}

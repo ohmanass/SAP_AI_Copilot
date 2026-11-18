@@ -43,3 +43,11 @@ def no_side_model_calls(monkeypatch):
 
     monkeypatch.setattr(titles, "_ask_model", offline)
     monkeypatch.setattr(followups, "_ask_model", offline)
+
+
+@pytest.fixture(autouse=True)
+def no_usage_recording(monkeypatch):
+    """AI usage is never written by the background thread during tests (test_usage enables it)."""
+    from app.llm import usage
+
+    monkeypatch.setattr(usage, "record", lambda *args, **kwargs: None)

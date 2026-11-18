@@ -52,11 +52,12 @@ def embedding_model():
 
 def embed(texts):
     """Embeddings of a list of texts (batched calls to SAP Generative AI Hub)."""
-    from gen_ai_hub.proxy.native.openai import embeddings
+    from app.llm import usage
 
     vectors = []
     for start in range(0, len(texts), EMBEDDING_BATCH):
-        response = embeddings.create(input=texts[start:start + EMBEDDING_BATCH], model_name=embedding_model())
+        response = usage.embeddings("embedding", input=texts[start:start + EMBEDDING_BATCH],
+                                    model_name=embedding_model())
         vectors.extend(item.embedding for item in sorted(response.data, key=lambda item: item.index))
     return vectors
 

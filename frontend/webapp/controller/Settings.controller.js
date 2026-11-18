@@ -29,16 +29,20 @@ sap.ui.define([
 				this.getView().getModel("settings").setProperty("/ui5Version", "—");
 			});
 
+			this.getView().setModel(new JSONModel({ busy: false, error: "", days: "30", data: null }), "usage");
+
 			this.getRouter().getRoute("settings").attachPatternMatched(this._onRouteMatched, this);
 		},
 
 		_onRouteMatched() {
 			this.setSection("settings");
 			this._load(false);
+			this._loadUsage();
 		},
 
 		onRefresh() {
 			this._load(false);
+			this._loadUsage();
 			this.getOwnerComponent().checkBackend();
 		},
 
@@ -70,6 +74,84 @@ sap.ui.define([
 				model.setProperty("/checkedAt", new Date());
 				model.setProperty(checkAi ? "/testing" : "/busy", false);
 			}
+		},
+
+		/* ------------------------- AI usage ------------------------- */
+
+		onUsageDaysChange() {
+			this._loadUsage();
+		},
+
+		async _loadUsage() {
+			const model = this.getView().getModel("usage");
+			model.setProperty("/busy", true);
+			model.setProperty("/error", "");
+			try {
+				model.setProperty("/data", await this.getService().getUsage(Number(model.getProperty("/days"))));
+			} catch (error) {
+				model.setProperty("/data", null);
+				model.setProperty("/error", `${this.getText("usageLoadError")} ${this.describeError(error)}`);
+			} finally {
+				model.setProperty("/busy", false);
+			}
+		},
+
+		formatFeature(feature) {
+			return feature ? this._optionalText(`usageFeature.${feature}`, feature) : "";
+		},
+
+		formatFeatureHint(feature) {
+			return feature ? this._optionalText(`usageFeatureHint.${feature}`, "") : "";
+		},
+
+		_optionalText(key, fallback) {
+			const bundle = this.getOwnerComponent().getModel("i18n").getResourceBundle();
+			return bundle.hasText(key) ? bundle.getText(key) : fallback;
+		},
+
+		formatCost(cost, currency) {
+			if (!currency) {
+				return "—";
+			}
+			const value = typeof cost === "number" ? cost : 0;
+			return new Intl.NumberFormat(undefined, {
+				style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: value < 1 ? 4 : 2
+			}).format(value);
+		},
+
+		/**
+		 * Bar chart of the tokens per day, as inline SVG. Built from numbers and
+		 * ISO dates only (validated below), so no text of the backend reaches the markup.
+		 */
+		formatUsageChart(days) {
+			if (!Array.isArray(days) || !days.length) {
+				return "<div></div>";
+			}
+			const width = 720;
+			const height = 120;
+			const gap = days.length > 40 ? 1 : 3;
+			const barWidth = (width - gap * (days.length - 1)) / days.length;
+			const max = Math.max(1, ...days.map((d) => Number(d.total_tokens) || 0));
+			const number = new Intl.NumberFormat();
+			const isoDay = (value) => (/^\d{4}-\d{2}-\d{2}$/.test(String(value)) ? String(value) : "");
+
+			const bars = days.map((day, index) => {
+				const tokens = Number(day.total_tokens) || 0;
+				const calls = Number(day.calls) || 0;
+				const barHeight = tokens ? Math.max(2, (tokens / max) * (height - 4)) : 0;
+				const x = index * (barWidth + gap);
+				const label = `${isoDay(day.day)} · ${number.format(tokens)} tokens · ${number.format(calls)} ${this.getText("usageCallsUnit")}`;
+				return `<g><title>${label}</title>` +
+					`<rect x="${x.toFixed(1)}" y="0" width="${barWidth.toFixed(1)}" height="${height}" class="cpUsageSlot"/>` +
+					`<rect x="${x.toFixed(1)}" y="${(height - barHeight).toFixed(1)}" width="${barWidth.toFixed(1)}" ` +
+					`height="${barHeight.toFixed(1)}" rx="2" class="cpUsageBar"/></g>`;
+			}).join("");
+
+			const first = isoDay(days[0].day);
+			const last = isoDay(days[days.length - 1].day);
+			return `<div class="cpUsageChart"><svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" ` +
+				`role="img" aria-label="${this.getText("usageChartLabel")}">${bars}</svg>` +
+				`<div class="cpUsageAxis"><span>${first}</span><span>${last}</span></div></div>`;
 		},
 
 		formatCount(value) {

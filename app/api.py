@@ -485,6 +485,13 @@ def delete_knowledge_document(name: str, user: str = Depends(current_user)):
     return {"deleted": name}
 
 
+@app.get("/api/usage")
+def ai_usage(days: int = 30, user: str = Depends(current_user)):
+    """Calls and tokens sent to SAP Generative AI Hub (counters only, every user)."""
+    from app.llm import usage
+    return usage.report(days)
+
+
 @app.get("/api/status")
 def status(check_ai: bool = False, user: str = Depends(current_user)):
     return system_info.get_system_status(check_ai=check_ai, owner=user)

@@ -64,9 +64,10 @@ def capabilities(tools) -> str:
 
 
 def _ask_model(content: str) -> str:
-    from gen_ai_hub.proxy.native.openai import chat
+    from app.llm import usage
 
-    response = chat.completions.create(
+    response = usage.chat_completion(
+        "suggestions",
         model_name=os.getenv("GENAI_MODEL_NAME", "gpt-4o-mini"),
         temperature=0,
         max_tokens=200,

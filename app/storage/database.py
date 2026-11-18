@@ -124,6 +124,17 @@ CREATE TABLE IF NOT EXISTS feedback (
 
 CREATE INDEX IF NOT EXISTS idx_feedback_updated
     ON feedback(updated_at);
+
+-- AI usage: calls and tokens per day, feature and model (counters only, no content)
+CREATE TABLE IF NOT EXISTS ai_usage (
+    usage_day TEXT NOT NULL,
+    feature TEXT NOT NULL,
+    model TEXT NOT NULL,
+    calls INTEGER NOT NULL,
+    prompt_tokens INTEGER NOT NULL,
+    completion_tokens INTEGER NOT NULL,
+    PRIMARY KEY (usage_day, feature, model)
+);
 """
 
 # Columns added after the first versions of the SQLite file: (table, column, definition)
@@ -213,6 +224,16 @@ HANA_TABLES = {
             tools_used NVARCHAR(2000) NOT NULL,
             created_at NVARCHAR(40) NOT NULL,
             updated_at NVARCHAR(40) NOT NULL
+        )""",
+    "AI_USAGE": """
+        CREATE COLUMN TABLE ai_usage (
+            usage_day NVARCHAR(10) NOT NULL,
+            feature NVARCHAR(30) NOT NULL,
+            model NVARCHAR(100) NOT NULL,
+            calls BIGINT NOT NULL,
+            prompt_tokens BIGINT NOT NULL,
+            completion_tokens BIGINT NOT NULL,
+            PRIMARY KEY (usage_day, feature, model)
         )""",
 }
 
