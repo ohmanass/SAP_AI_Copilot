@@ -1,5 +1,7 @@
 # SAP AI Copilot
 
+[![Tests](https://github.com/ohmanass/SAP_AI_Copilot/actions/workflows/tests.yml/badge.svg)](https://github.com/ohmanass/SAP_AI_Copilot/actions/workflows/tests.yml)
+
 Assistant IA pour SAP MM, SD, FI et le développement ABAP, construit sur **SAP Generative AI Hub** (SAP AI Core). Il combine un agent à **Tool Calling** qui interroge les commandes d'achat, les commandes clients et les factures fournisseurs d'un système **SAP S/4HANA Cloud via OData**, un pipeline **RAG** sur une documentation technique SAP et une interface **SAPUI5** inspirée de SAP Fiori.
 
 L'application fonctionne en local et se déploie sur **SAP BTP (Cloud Foundry)** derrière l'**Application Router**, avec connexion SAP (XSUAA).
@@ -253,7 +255,14 @@ Facultatif :
 
 ### Tests
 
-`python -m pytest` lance les tests du backend. Ils simulent toutes les réponses externes (S/4HANA, Destination service) : ils tournent hors ligne, sans clé ni identifiants, en moins d'une seconde. Ils couvrent :
+`python -m pytest` lance les tests du backend. Ils simulent toutes les réponses externes (S/4HANA, SAP AI Core, Destination service, base de données) : ils tournent hors ligne, sans clé ni identifiants, en une vingtaine de secondes.
+
+Ils tournent aussi **automatiquement** :
+
+- **sur GitHub à chaque push et pull request** (GitHub Actions, `.github/workflows/tests.yml`), avec le linter UI5 du frontend. Le badge en haut de ce README montre le résultat du dernier push, le détail est dans l'onglet *Actions* du dépôt. Aucun secret n'est nécessaire ;
+- **avant chaque déploiement** : `deploy.ps1` lance les tests et ne déploie rien si l'un d'eux échoue (`-SkipTests` pour une urgence seulement).
+
+Ils couvrent :
 
 - le **rapprochement à trois** : chaque statut, retours et annulations d'entrées, avoirs, factures annulées, débits ultérieurs, tolérance de prix, solde GR/IR, numéros de poste au format différent selon l'API ;
 - les **langues de l'interface** : traductions relues complètes (mêmes clés et mêmes variables que l'anglais, aucune apostrophe droite qui casserait un `{0}`), mêmes langues relues dans le backend, `Language.js` et le manifest, format `.properties` (échappements, émoji, continuations), traduction par le modèle (simulé) mise en cache, retraduction des seuls textes modifiés, contrôles (variables, termes techniques, longueur), textes rejetés laissés en anglais, modèle indisponible, API (ETag, 304, langues refusées) ;

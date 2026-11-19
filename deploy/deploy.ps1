@@ -8,6 +8,7 @@
     passed to Cloud Foundry through temporary files, never on the command line.
 
     Steps:
+      0. Tests   the offline test suite must pass (as in the GitHub Actions CI)
       1. Build   deploy/build/backend    (Python app, pinned requirements, shipped documents)
                  deploy/build/approuter  (approuter + SAPUI5 build, UI5 from the SAP CDN)
       2. Services: sap-ai-copilot-xsuaa (xsuaa/application),
@@ -25,12 +26,16 @@
 .PARAMETER BuildOnly
     Only build deploy/build, do not touch Cloud Foundry.
 
+.PARAMETER SkipTests
+    Deploy without running the tests first (emergency only).
+
 .EXAMPLE
     cf login -a https://api.cf.eu10-005.hana.ondemand.com --sso
     .\deploy\deploy.ps1
 #>
 param(
-    [switch]$BuildOnly
+    [switch]$BuildOnly,
+    [switch]$SkipTests
 )
 
 $ErrorActionPreference = "Stop"
@@ -158,6 +163,21 @@ if (-not $S4Destination) { $required += "SAP_API_KEY" }
 $missing = $required | Where-Object { -not $envValues[$_] }
 if ($missing) { throw "Missing in .env: $($missing -join ', ')" }
 $GenAiModel = if ($envValues["GENAI_MODEL_NAME"]) { $envValues["GENAI_MODEL_NAME"] } else { "gpt-4o-mini" }
+
+# ---------------------------------------------------------------------------
+# 0. Tests: nothing is deployed if one of them fails
+# ---------------------------------------------------------------------------
+if ($SkipTests) {
+    Write-Warning "Tests skipped (-SkipTests)"
+} else {
+    Step "Running the tests"
+    Push-Location $Root
+    try {
+        Invoke-Native "Tests (python -m pytest)" { & (Join-Path $Root ".venv\Scripts\python.exe") -m pytest -q -p no:cacheprovider }
+    } finally {
+        Pop-Location
+    }
+}
 
 # ---------------------------------------------------------------------------
 # 1. Build
