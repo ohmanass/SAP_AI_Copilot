@@ -8,12 +8,22 @@ configuration so the developer's .env does not change the results.
 
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
 
+
 # Importing the API must not index the knowledge base (it would call SAP AI Core)
 os.environ["KB_SYNC_ON_STARTUP"] = "0"
+
+# Same conditions as GitHub Actions: no SAP AI Core credentials, neither from the
+# developer's .env (empty values are kept by load_dotenv) nor from ~/.aicore/config.json.
+# A test that reaches the real SDK fails here too instead of only in the CI.
+for _name in ("AICORE_CLIENT_ID", "AICORE_CLIENT_SECRET", "AICORE_AUTH_URL", "AICORE_BASE_URL",
+              "AICORE_RESOURCE_GROUP"):
+    os.environ[_name] = ""
+os.environ["AICORE_HOME"] = tempfile.mkdtemp(prefix="no-aicore-")
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:

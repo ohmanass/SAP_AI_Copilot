@@ -45,9 +45,11 @@ def proxy(monkeypatch):
             return chunks()
         return SimpleNamespace(model="gpt-4o-mini-2024-07-18", usage=tokens(500, 40), choices=[])
 
-    monkeypatch.setattr(client.chat.completions, "create", create)
-    monkeypatch.setattr(client.embeddings, "create",
-                        lambda **parameters: SimpleNamespace(usage=tokens(300), data=[]))
+    # Whole clients replaced through the module dict: the real ones are created lazily on first
+    # access and need SAP AI Core credentials (none on GitHub Actions)
+    monkeypatch.setitem(vars(client), "chat", SimpleNamespace(completions=SimpleNamespace(create=create)))
+    monkeypatch.setitem(vars(client), "embeddings", SimpleNamespace(
+        create=lambda **parameters: SimpleNamespace(usage=tokens(300), data=[])))
     return seen
 
 

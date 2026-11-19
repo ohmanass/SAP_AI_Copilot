@@ -108,8 +108,8 @@ def test_the_model_answer_is_cleaned_of_a_code_fence(monkeypatch):
 
     message = type("M", (), {"content": "```text\nINVOICE 1\n```"})
     Response.choices = [type("C", (), {"message": message})]
-    import gen_ai_hub.proxy.native.openai as proxy
-    monkeypatch.setattr(proxy.chat.completions, "create", lambda **kwargs: Response)
+    from app.llm import usage
+    monkeypatch.setattr(usage, "chat_completion", lambda feature, **kwargs: Response)
     assert vision._ask_model("data:image/png;base64,") == "INVOICE 1"
 
 
