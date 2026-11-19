@@ -10,11 +10,10 @@ import threading
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
-from app import auth, system_info
+from app import auth, system_info, web
 from app.agent import followups, titles
 from app.agent.agent import SAPAgent
 from app.attachments import extract as attachment_extract
@@ -33,17 +32,6 @@ app = FastAPI(
     title="SAP AI Copilot API",
     description="Backend API for SAP AI Copilot",
     version="1.1.0"
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8080",
-        "http://127.0.0.1:8080"
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
 )
 
 # On SAP BTP: every /api call (except /api/health) needs a valid XSUAA token
@@ -600,3 +588,8 @@ def delete_session_attachment(session_id: str, attachment_id: int, user: str = D
     if not chat_store.delete_attachment(session_id, user, attachment_id):
         raise HTTPException(status_code=404, detail="Document not found.")
     return {"deleted": attachment_id}
+
+
+# Local development: the interface on the same server and port as the API (app/web.py).
+# Last: the API routes above take precedence over the files of the interface.
+web.mount_frontend(app)

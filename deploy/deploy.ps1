@@ -38,7 +38,8 @@ $ErrorActionPreference = "Stop"
 $Root      = Split-Path -Parent $PSScriptRoot
 $DeployDir = $PSScriptRoot
 $BuildDir  = Join-Path $DeployDir "build"
-$Ui5Version = "1.136.24"
+# SAPUI5 version: the one of frontend/ui5.yaml (index.html loads it from the SAP CDN)
+$Ui5Version = ((Get-Content (Join-Path $Root "frontend\ui5.yaml") -Raw) | Select-String '(?m)^\s+version:\s*"([^"]+)"').Matches[0].Groups[1].Value
 
 $Backend   = "sap-ai-copilot-backend"
 $Approuter = "sap-ai-copilot-approuter"
@@ -203,7 +204,7 @@ $pinned = foreach ($requirement in Get-Content (Join-Path $Root "requirements.tx
 $pinned | Set-Content (Join-Path $BackendBuild "requirements.txt") -Encoding ascii
 "python-3.12.x" | Set-Content (Join-Path $BackendBuild "runtime.txt") -Encoding ascii
 
-# --- Frontend: UI5 build, framework loaded from the SAP CDN ---
+# --- Frontend: UI5 build (Component-preload), framework loaded from the SAP CDN ---
 Push-Location (Join-Path $Root "frontend")
 try {
     Invoke-Native "ui5 build" { npx.cmd ui5 build --clean-dest --dest (Join-Path $ApprouterBuild "webapp") }
@@ -212,9 +213,9 @@ try {
 }
 $index = Join-Path $ApprouterBuild "webapp\index.html"
 $html = Get-Content $index -Raw
-$html = $html.Replace('src="resources/sap-ui-core.js"', "src=`"https://ui5.sap.com/$Ui5Version/resources/sap-ui-core.js`"")
-if ($html -notmatch "ui5.sap.com/$Ui5Version") { throw "Could not switch the UI5 bootstrap to the CDN" }
-[IO.File]::WriteAllText($index, $html)
+if ($html -notmatch [regex]::Escape("https://ui5.sap.com/$Ui5Version/resources/sap-ui-core.js")) {
+    throw "index.html must load SAPUI5 $Ui5Version (frontend/ui5.yaml) from https://ui5.sap.com"
+}
 
 # Cache busting: the stylesheet name carries a hash of its content, so no browser
 # or proxy cache can serve an outdated version after a deployment.

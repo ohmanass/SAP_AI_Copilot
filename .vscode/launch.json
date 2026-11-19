@@ -1,0 +1,18 @@
+{
+    // F5: SAP AI Copilot with the Python debugger (interface and API on http://127.0.0.1:8000).
+    // No automatic restart while debugging: restart with Ctrl+Shift+F5 after a change of app/.
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "SAP AI Copilot (debug)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": ["app.api:app", "--port", "8000"],
+            "cwd": "${workspaceFolder}",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe",
+            "envFile": "${workspaceFolder}/.env",
+            "justMyCode": true
+        }
+    ]
+}

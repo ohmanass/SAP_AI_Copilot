@@ -1,5 +1,6 @@
 """
-Backend for local development, restarted automatically on every change of app/*.py.
+Local server (interface and API, see app/web.py), restarted automatically on
+every change of app/*.py. Started by start.ps1 / start.cmd:
 
     python scripts/dev_server.py          port 8000
     python scripts/dev_server.py 8001
@@ -32,13 +33,14 @@ def serve(port: int):
 
 def announce(changes):
     files = sorted({Path(path).relative_to(ROOT).as_posix() for _, path in changes})
-    print(f"\n↻ Restarting the backend: {', '.join(files[:5])}{' …' if len(files) > 5 else ''}\n", flush=True)
+    # ASCII only: the Windows console may not encode other characters
+    print(f"\n>> Restarting: {', '.join(files[:5])}{' ...' if len(files) > 5 else ''}\n", flush=True)
 
 
 def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
-    print(f"SAP AI Copilot backend on http://127.0.0.1:{port}: restarted automatically when app/ changes "
-          "(Ctrl+C to stop)", flush=True)
+    print(f"SAP AI Copilot on http://127.0.0.1:{port}/ - restarted automatically when app/ changes, "
+          "F5 after a change of the interface (Ctrl+C to stop)", flush=True)
     watchfiles.run_process(
         ROOT / "app",
         target=serve,

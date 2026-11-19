@@ -63,13 +63,13 @@ L'application fonctionne en local et se déploie sur **SAP BTP (Cloud Foundry)**
 ## Architecture
 
 ```text
-Frontend SAPUI5
+Frontend SAPUI5 (bibliothèque SAPUI5 depuis le CDN SAP ui5.sap.com)
         │  HTTP / REST (JSON), chemin relatif /api
         ▼
-Local : proxy de ui5 serve (port 8080)   │   SAP BTP : Application Router + XSUAA
-        │                                            │  jeton de l'utilisateur transmis
+Local : un seul serveur (port 8000)      │   SAP BTP : Application Router + XSUAA
+  sert l'interface et l'API              │   sert l'interface, transmet le jeton de l'utilisateur
         ▼                                            ▼
-Backend FastAPI (local : port 8000 ; BTP : jeton XSUAA exigé)
+Backend FastAPI (BTP : jeton XSUAA exigé)
         │
         ▼
 Agent SAP (Tool Calling)
@@ -213,51 +213,41 @@ Sur SAP BTP, le système S/4HANA est lu dans une **destination** du Destination 
 
 ### Prérequis
 
-- Python 3.12
-- Node.js 20.11 ou plus récent
+- Python 3.12 (3.11 minimum)
 - Un accès à SAP AI Core avec des déploiements `gpt-4o-mini` et `text-embedding-3-large` dans SAP Generative AI Hub
+- Pour déployer sur SAP BTP seulement : Node.js 20.11 ou plus récent et le CLI Cloud Foundry
 
-### Backend
+### Démarrer
+
+Double-cliquer sur **`start.cmd`** (ou `.\start` dans un terminal). L'application s'ouvre sur **http://127.0.0.1:8000** :
+
+1. au premier lancement, l'environnement Python (`.venv`) est créé ;
+2. les dépendances sont installées, puis réinstallées seulement quand `requirements.txt` change ;
+3. si `.env` manque, il est créé depuis `.env.example` et ouvert pour y saisir les identifiants SAP AI Core ;
+4. le serveur démarre et le navigateur s'ouvre dès qu'il répond. Si l'application tourne déjà, le navigateur s'ouvre simplement dessus.
+
+Un **seul serveur** sert l'interface SAPUI5 et l'API (`app/web.py`) : pas de second serveur, pas de proxy, pas de CORS. La bibliothèque SAPUI5 vient du CDN SAP (`ui5.sap.com`, version de `frontend/ui5.yaml`), comme sur BTP.
+
+- Une modification de `app/*.py` redémarre le serveur automatiquement, en 2 secondes environ (`scripts/dev_server.py`, avec `watchfiles` : `uvicorn --reload` reste bloqué sur « Reloading... » sous Windows quand l'arrêt par Ctrl+C se perd).
+- Une modification de l'interface (`frontend/webapp`) s'affiche avec F5 : les fichiers sont servis sans cache.
+- Seul un changement de `.env` demande de relancer `start.cmd` ; un changement de `requirements.txt` est installé au lancement suivant.
+- `.\start.ps1 -Port 8001 -NoBrowser` : autre port, sans ouvrir le navigateur.
+- Dans VS Code, **F5** lance l'application avec le débogueur Python (`.vscode/launch.json`).
+
+Facultatif :
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-
-# Identifiants SAP AI Core : copier le modèle puis le compléter
-Copy-Item .env.example .env
-
 # Données SAP MM fictives (SQLite), utilisées si SAP_DATA_SOURCE=sqlite
-python -m app.database.seed
-
-# Indexation de la documentation livrée (facultatif : le backend la fait au démarrage)
-python -m app.rag.index_documents
-
-# Backend sur le port 8000, redémarré automatiquement à chaque modification de app/
-.\dev-backend.ps1
+.\.venv\Scripts\python.exe -m app.database.seed
 ```
-
-`dev-backend.ps1` (`scripts/dev_server.py`) remplace `uvicorn --reload`. Sous Windows, `--reload` arrête l'ancien serveur par un Ctrl+C puis l'attend sans limite de temps : si l'événement se perd, le rechargement reste bloqué sur « Reloading... » et l'ancien code continue de tourner. `watchfiles` arrête l'ancien serveur avec une limite de temps et redémarre toujours le nouveau, en 2 secondes environ. Seul un changement de `.env` ou des dépendances demande de relancer le script.
-
-### Frontend
-
-```powershell
-cd frontend
-npm install
-npm start
-```
-
-L'application s'ouvre sur `http://localhost:8080/index.html`. Le serveur de développement relaie `/api` vers `http://127.0.0.1:8000` (modifiable avec la variable `API_PROXY_TARGET`), comme l'Application Router le fait sur SAP BTP.
-
-> Sous Windows, si PowerShell bloque `npm` (politique d'exécution), utiliser `npm.cmd`.
 
 ### Commandes utiles
 
 | Commande | Rôle |
 | --- | --- |
-| `npm start` | Serveur de développement UI5 sur le port 8080 |
-| `npm run lint` | Analyse du code SAPUI5 (UI5 linter) |
-| `npm run build` | Build de production dans `frontend/dist` |
+| `start.cmd` | Démarre l'application en local (interface et API sur le port 8000) |
+| `npm run lint` (dans `frontend`) | Analyse du code SAPUI5 (UI5 linter) |
+| `npm run build` (dans `frontend`) | Build de production dans `frontend/dist` (utilisé par `deploy.ps1`) |
 | `python -m app.main` | Version en ligne de commande de l'agent |
 | `python -m pytest` | Tests automatisés du backend (depuis la racine du projet) |
 | `python -m evals.agent_eval` | Évaluation de la qualité de l'agent avec le vrai modèle (voir ci-dessous) |

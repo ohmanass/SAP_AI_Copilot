@@ -4,8 +4,6 @@
   "description": "SAPUI5 freestyle frontend for SAP AI Copilot",
   "private": true,
   "scripts": {
-    "start": "ui5 serve --port 8080 --open index.html",
-    "serve": "ui5 serve --port 8080",
     "build": "ui5 build --clean-dest",
     "lint": "ui5lint"
   },
