@@ -47,7 +47,9 @@ CREATE TABLE IF NOT EXISTS conversations (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     module TEXT,
-    owner TEXT
+    owner TEXT,
+    -- "provisional" (beginning of the first question), "model" or "user"; NULL: stored before
+    title_source TEXT
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -154,6 +156,7 @@ SQLITE_MIGRATIONS = (
     ("messages", "attachments", "TEXT NOT NULL DEFAULT '[]'"),
     ("attachments", "chars", "INTEGER"),
     ("conversations", "owner", "TEXT"),
+    ("conversations", "title_source", "TEXT"),
     ("attachments", "owner", "TEXT"),
     ("attachments", "masked", "TEXT"),
     ("kb_documents", "masked", "TEXT"),
@@ -170,7 +173,8 @@ HANA_TABLES = {
             created_at NVARCHAR(40) NOT NULL,
             updated_at NVARCHAR(40) NOT NULL,
             module NVARCHAR(20),
-            owner NVARCHAR(256)
+            owner NVARCHAR(256),
+            title_source NVARCHAR(20)
         )""",
     "MESSAGES": """
         CREATE COLUMN TABLE messages (
@@ -266,6 +270,7 @@ HANA_INDEXES = {
 # Columns added after the first HANA tables: (table, column, definition)
 HANA_MIGRATIONS = (
     ("CONVERSATIONS", "OWNER", "ALTER TABLE conversations ADD (owner NVARCHAR(256))"),
+    ("CONVERSATIONS", "TITLE_SOURCE", "ALTER TABLE conversations ADD (title_source NVARCHAR(20))"),
     ("ATTACHMENTS", "OWNER", "ALTER TABLE attachments ADD (owner NVARCHAR(256))"),
     ("ATTACHMENTS", "MASKED", "ALTER TABLE attachments ADD (masked NVARCHAR(500))"),
     ("KB_DOCUMENTS", "MASKED", "ALTER TABLE kb_documents ADD (masked NVARCHAR(500))"),

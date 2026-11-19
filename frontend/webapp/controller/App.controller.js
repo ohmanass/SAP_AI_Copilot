@@ -128,6 +128,27 @@ sap.ui.define([
 			}
 		},
 
+		/** "Automatic title": the model writes the title now and manages it again. */
+		async onAutomaticTitle() {
+			const model = this.getView().getModel("rename");
+			const { sessionId, busy } = model.getData();
+			if (busy) {
+				return;
+			}
+			model.setProperty("/busy", true);
+			try {
+				const result = await this.getService().automaticTitle(sessionId);
+				(await this._renameDialog).close();
+				MessageToast.show(this.getText("titleAutomaticDone", [result.title]));
+				EventBus.getInstance().publish("copilot", "conversationRenamed", { sessionId, title: result.title });
+				this.getOwnerComponent().refreshConversations();
+			} catch (error) {
+				MessageBox.error(error.detail || this.describeError(error));
+			} finally {
+				model.setProperty("/busy", false);
+			}
+		},
+
 		async onRenameCancel(promiseOrEvent) {
 			// Escape key: UI5 passes {resolve, reject} and closes the dialog on resolve
 			if (promiseOrEvent && typeof promiseOrEvent.resolve === "function") {

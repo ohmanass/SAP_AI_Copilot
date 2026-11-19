@@ -14,8 +14,9 @@ from pathlib import Path
 import pytest
 
 
-# Importing the API must not index the knowledge base (it would call SAP AI Core)
+# Importing the API must not index the knowledge base nor title conversations (SAP AI Core)
 os.environ["KB_SYNC_ON_STARTUP"] = "0"
+os.environ["TITLE_BACKFILL_ON_STARTUP"] = "0"
 
 # Same conditions as GitHub Actions: no SAP AI Core credentials, neither from the
 # developer's .env (empty values are kept by load_dotenv) nor from ~/.aicore/config.json.

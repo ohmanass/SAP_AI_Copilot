@@ -121,8 +121,8 @@ def save_exchange(
             # Fails on the primary key if the id belongs to another user: nothing is written
             cursor.execute(
                 """
-                INSERT INTO conversations (session_id, title, created_at, updated_at, module, owner)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO conversations (session_id, title, created_at, updated_at, module, owner, title_source)
+                VALUES (?, ?, ?, ?, ?, ?, 'provisional')
                 """,
                 (session_id, build_title(user_message), now, now, module, owner)
             )
@@ -216,32 +216,78 @@ def get_conversation(session_id: str, owner: str):
     return result
 
 
-def conversation_exists(session_id: str, owner: str) -> bool:
-    with _database().cursor() as cursor:
-        return cursor.execute(
-            "SELECT session_id FROM conversations WHERE session_id = ? AND owner = ?", (session_id, owner)
-        ).fetchone() is not None
-
-
-def set_generated_title(session_id: str, owner: str, title: str, provisional: str) -> bool:
+def set_generated_title(session_id: str, owner: str, title: str, force: bool = False) -> bool:
     """
-    Replace the provisional title by the one written by the model, only if it is
-    still the provisional one (a title chosen by the user is never replaced).
+    Title written by the model (app.agent.titles). A title chosen by the user is
+    never replaced, unless force: the user asked for an automatic title again.
     """
+    keep_user_title = "" if force else " AND (title_source IS NULL OR title_source <> 'user')"
     with _database().cursor() as cursor:
         cursor.execute(
-            "UPDATE conversations SET title = ? WHERE session_id = ? AND owner = ? AND title = ?",
-            (build_title(title), session_id, owner, provisional)
+            "UPDATE conversations SET title = ?, title_source = 'model'"
+            f" WHERE session_id = ? AND owner = ?{keep_user_title}",
+            (build_title(title), session_id, owner)
         )
         return cursor.rowcount > 0
 
 
+def title_state(session_id: str, owner: str):
+    """Title, its source and the number of exchanges of a conversation, or None."""
+    with _database().cursor() as cursor:
+        row = cursor.execute(
+            """
+            SELECT c.title, c.title_source,
+                   (SELECT COUNT(*) FROM messages m WHERE m.session_id = c.session_id AND m.role = 'assistant')
+                       AS exchanges
+            FROM conversations c
+            WHERE c.session_id = ? AND c.owner = ?
+            """,
+            (session_id, owner)
+        ).fetchone()
+    if row is None:
+        return None
+    return {"title": row["title"], "source": row["title_source"], "exchanges": int(row["exchanges"])}
+
+
+def recent_exchanges(session_id: str, owner: str, limit: int = 6):
+    """The latest question/answer pairs of the user's conversation (oldest first)."""
+    conversation = get_conversation(session_id, owner)
+    if conversation is None:
+        return []
+    exchanges, question = [], None
+    for message in conversation["messages"]:
+        if message["role"] == "user":
+            question = message
+        elif question is not None:
+            exchanges.append({
+                "question": question["content"],
+                "answer": message["content"],
+                "attachments": [a.get("name") for a in question.get("attachments") or [] if a.get("name")]
+            })
+            question = None
+    return exchanges[-limit:]
+
+
+def conversations_without_title_source(limit: int = 500):
+    """Conversations stored before titles were managed by the model (every user), with messages."""
+    with _database().cursor() as cursor:
+        return cursor.execute(
+            f"""
+            SELECT c.session_id, c.owner FROM conversations c
+            WHERE c.title_source IS NULL
+              AND EXISTS (SELECT 1 FROM messages m WHERE m.session_id = c.session_id AND m.role = 'assistant')
+            ORDER BY c.updated_at DESC
+            LIMIT {int(limit)}
+            """
+        ).fetchall()
+
+
 def rename_conversation(session_id: str, owner: str, title: str) -> bool:
-    """Change a conversation title (normalised like generated titles)."""
+    """Title chosen by the user (normalised like generated titles): the model no longer changes it."""
 
     with _database().cursor() as cursor:
         cursor.execute(
-            "UPDATE conversations SET title = ? WHERE session_id = ? AND owner = ?",
+            "UPDATE conversations SET title = ?, title_source = 'user' WHERE session_id = ? AND owner = ?",
             (build_title(title), session_id, owner)
         )
         return cursor.rowcount > 0

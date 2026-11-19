@@ -73,6 +73,11 @@ sap.ui.define([
 			return this._request("health", { timeoutMs: 5000 });
 		},
 
+		/** The model writes the conversation title now and manages it again (after a rename). */
+		automaticTitle(sessionId) {
+			return this._request(`sessions/${encodeURIComponent(sessionId)}/title`, { method: "POST", timeoutMs: 60000 });
+		},
+
 		/** Live SAP indicators of the home screen. */
 		getDashboard() {
 			return this._request("dashboard", { timeoutMs: 60000 });

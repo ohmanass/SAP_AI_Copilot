@@ -43,6 +43,10 @@ chat_store.initialize()
 if os.getenv("KB_SYNC_ON_STARTUP", "1") != "0":
     knowledge_store.sync_bundled_in_background()
 
+# Title the conversations stored before titles were managed by the model
+if os.getenv("TITLE_BACKFILL_ON_STARTUP", "1") != "0":
+    titles.backfill_in_background()
+
 
 @app.exception_handler(knowledge_store.KnowledgeError)
 def knowledge_error(request, error):
@@ -160,14 +164,20 @@ def module_key(agent):
     return agent.module.key if agent.module else None
 
 
-def start_title(session_id, owner, request, attachments):
-    """New conversation: the model writes its title in parallel with the answer (Future or None)."""
+def plan_title(session_id, owner):
+    """
+    After a saved exchange: the title to write (first exchange) or to review
+    (exchanges 2, 4, 8, 16), started in the background. (Future, title before) or None.
+    """
     try:
-        if chat_store.conversation_exists(session_id, owner):
+        state = chat_store.title_state(session_id, owner)
+        if not state or not titles.due(state["exchanges"], state["source"]):
             return None
+        exchanges = chat_store.recent_exchanges(session_id, owner, titles.EXCHANGES_SHOWN)
     except chat_store.StoreUnavailable:
-        return None         # the title could not be saved anyway
-    return titles.start(request.message, [a["name"] for a in attachments])
+        return None
+    current = state["title"] if state["source"] == "model" else None
+    return titles.start(exchanges, current), state["title"]
 
 
 def start_followups(agent, request, answer, tables=None):
@@ -176,13 +186,16 @@ def start_followups(agent, request, answer, tables=None):
     return followups.start(request.message, answer, agent.tools, workspace, tables)
 
 
-def save_title(future, session_id, owner, request):
-    """Store the generated title (unless renamed meanwhile); returns it, or None."""
+def save_title(planned, session_id, owner):
+    """Store the title of plan_title when it changed (never over a user's title); returns it, or None."""
+    if not planned:
+        return None
+    future, before = planned
     title = titles.result(future)
-    if not title:
+    if not title or chat_store.build_title(title) == before:
         return None
     try:
-        if chat_store.set_generated_title(session_id, owner, title, chat_store.build_title(request.message)):
+        if chat_store.set_generated_title(session_id, owner, title):
             return chat_store.build_title(title)
     except chat_store.StoreUnavailable as error:
         logger.warning("Generated title not saved: %s", error)
@@ -216,7 +229,6 @@ def chat(request: ChatRequest, user: str = Depends(current_user)):
 
     try:
         attachments = message_attachments(session_id, user, request)
-        title_future = start_title(session_id, user, request, attachments)
 
         with lock:
             result = agent.ask_with_details(request.message + attachment_reader.note(attachments))
@@ -242,7 +254,7 @@ def chat(request: ChatRequest, user: str = Depends(current_user)):
             module=module_key(agent),
             tables=result["tables"],
             message_id=message_id,
-            title=save_title(title_future, session_id, user, request) if message_id else None,
+            title=save_title(plan_title(session_id, user), session_id, user) if message_id else None,
             suggestions=followups.result(followups_future)
         )
 
@@ -263,7 +275,7 @@ def chat_stream(request: ChatRequest, user: str = Depends(current_user)):
       tool_end     {"type", "name", "success"}
       token        {"type", "content"}
       done         {"type", "session_id", "response", "sources", "tools_used", "tables", "message_id"}
-      title        {"type", "session_id", "title"}   new conversation: title written by the model
+      title        {"type", "session_id", "title"}   title written or changed by the model (after "done")
       suggestions  {"type", "message_id", "items"}   follow-up questions for this answer (after "done")
       error        {"type", "message"}
     """
@@ -271,7 +283,6 @@ def chat_stream(request: ChatRequest, user: str = Depends(current_user)):
     session_id = request.session_id or str(uuid4())
     agent, lock = get_session(session_id, user, request.module)
     attachments = message_attachments(session_id, user, request)
-    title_future = start_title(session_id, user, request, attachments)
 
     def event_line(event):
         return json.dumps(event, ensure_ascii=False) + "\n"
@@ -316,10 +327,10 @@ def chat_stream(request: ChatRequest, user: str = Depends(current_user)):
         if answer is None:
             return
         followups_future = start_followups(agent, request, answer[0], answer[2])
-        if saved and title_future is not None:
-            title = save_title(title_future, session_id, user, request)
-            if title:
-                yield event_line({"type": "title", "session_id": session_id, "title": title})
+        planned_title = plan_title(session_id, user) if saved else None
+        title = save_title(planned_title, session_id, user)
+        if title:
+            yield event_line({"type": "title", "session_id": session_id, "title": title})
         suggestions = followups.result(followups_future)
         if suggestions:
             yield event_line({"type": "suggestions", "message_id": answer[1], "items": suggestions})
@@ -367,6 +378,20 @@ def rename_session(session_id: str, request: RenameRequest, user: str = Depends(
 
     conversation = chat_store.get_conversation(session_id, user)
     return {"session_id": session_id, "title": conversation["title"]}
+
+
+@app.post("/api/sessions/{session_id}/title")
+def automatic_title(session_id: str, user: str = Depends(current_user)):
+    """The model writes the title now and manages it again (after a rename by the user)."""
+
+    exchanges = chat_store.recent_exchanges(session_id, user, titles.EXCHANGES_SHOWN)
+    if not exchanges:
+        raise HTTPException(status_code=404, detail=NOT_FOUND)
+    title = titles.generate(exchanges)
+    if not title:
+        raise HTTPException(status_code=503, detail="The title could not be written. Try again later.")
+    chat_store.set_generated_title(session_id, user, title, force=True)
+    return {"session_id": session_id, "title": chat_store.build_title(title)}
 
 
 @app.delete("/api/sessions/{session_id}")

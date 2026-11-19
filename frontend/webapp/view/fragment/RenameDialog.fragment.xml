@@ -21,6 +21,16 @@
 				liveChange=".onRenameLiveChange"
 				submit=".onRenameSave"
 				width="100%"/>
+			<!-- The model writes the title again and manages it from now on -->
+			<Button
+				text="{i18n>titleAutomatic}"
+				icon="sap-icon://ai"
+				type="Transparent"
+				class="cpTitleAutoBtn"
+				tooltip="{i18n>titleAutomaticTooltip}"
+				enabled="{= !${rename>/busy} }"
+				press=".onAutomaticTitle"/>
+			<Text text="{i18n>titleAutomaticNote}" class="cpRenameNote"/>
 		</VBox>
 		<beginButton>
 			<Button

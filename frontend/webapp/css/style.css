@@ -2560,3 +2560,19 @@ html, body.cpBody {
 		gap: 0.5rem;
 	}
 }
+
+/* Rename dialog: hand the title back to the assistant */
+.cpTitleAutoBtn.sapMBtn {
+	margin-top: 0.75rem;
+}
+
+.cpTitleAutoBtn .sapMBtnInner .sapMBtnIcon,
+.cpTitleAutoBtn .sapMBtnInner bdi {
+	color: var(--cp-cyan-soft);
+}
+
+.cpRenameNote.sapMText {
+	margin-top: 0.25rem;
+	font-size: 0.75rem;
+	color: var(--cp-muted);
+}
