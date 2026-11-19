@@ -1,6 +1,7 @@
 sap.ui.define([
-	"./util/Language"
-], (Language) => {
+	"./util/Language",
+	"./util/Install"
+], (Language, Install) => {
 	"use strict";
 
 	/**
@@ -8,6 +9,9 @@ sap.ui.define([
 	 * set before the component exists, so every text, date and number is created
 	 * in that language. Then ComponentSupport creates the app from index.html.
 	 */
+	// Before anything else: the browser offers the installation once, early
+	Install.start();
+
 	return Language.apply().finally(() => {
 		sap.ui.require(["sap/ui/core/ComponentSupport"]);
 	});

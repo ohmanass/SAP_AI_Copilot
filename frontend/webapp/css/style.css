@@ -339,6 +339,24 @@ html, body.cpBody {
 	padding: 1rem 1.25rem 0.5rem;
 }
 
+/* "Install the app" (PWA), above the profile, only while the browser offers it */
+.cpInstallBtn.sapMBtn {
+	width: 100%;
+	margin-top: 0.5rem;
+}
+
+.cpInstallBtn .sapMBtnInner {
+	justify-content: flex-start;
+	width: 100%;
+	border: 1px dashed rgba(34, 211, 238, 0.4);
+	border-radius: 10px;
+}
+
+.cpInstallBtn .sapMBtnInner .sapMBtnIcon,
+.cpInstallBtn .sapMBtnInner bdi {
+	color: var(--cp-cyan-soft);
+}
+
 /* Profile */
 .cpProfile {
 	display: flex;

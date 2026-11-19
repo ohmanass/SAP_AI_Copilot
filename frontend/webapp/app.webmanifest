@@ -1,0 +1,23 @@
+{
+	"id": "./",
+	"name": "SAP AI Copilot",
+	"short_name": "AI Copilot",
+	"description": "AI assistant for SAP MM, SD, FI and ABAP, powered by SAP Generative AI Hub",
+	"lang": "en",
+	"start_url": "./",
+	"scope": "./",
+	"display": "standalone",
+	"background_color": "#070d1a",
+	"theme_color": "#070d1a",
+	"categories": ["business", "productivity"],
+	"icons": [
+		{ "src": "img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+		{ "src": "img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+		{ "src": "img/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+		{ "src": "img/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+	],
+	"shortcuts": [
+		{ "name": "New chat", "url": "./#/", "icons": [{ "src": "img/icon-192.png", "sizes": "192x192" }] },
+		{ "name": "Knowledge Base", "url": "./#/knowledge-base", "icons": [{ "src": "img/icon-192.png", "sizes": "192x192" }] }
+	]
+}

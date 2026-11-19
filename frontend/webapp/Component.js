@@ -4,8 +4,9 @@ sap.ui.define([
 	"sap/ui/Device",
 	"sap/ui/model/resource/ResourceModel",
 	"./service/CopilotService",
-	"./util/Language"
-], (UIComponent, JSONModel, Device, ResourceModel, CopilotService, Language) => {
+	"./util/Language",
+	"./util/Install"
+], (UIComponent, JSONModel, Device, ResourceModel, CopilotService, Language, Install) => {
 	"use strict";
 
 	return UIComponent.extend("com.sapaicopilot.app.Component", {
@@ -54,6 +55,9 @@ sap.ui.define([
 			this._loadCurrentUser();
 
 			this.setModel(new JSONModel(Device), "device");
+
+			// "Install the app" button: shown while the browser offers the installation
+			Install.onChange((canInstall) => this.getModel("app").setProperty("/canInstall", canInstall));
 
 			this.getRouter().initialize();
 

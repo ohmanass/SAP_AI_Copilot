@@ -3,8 +3,9 @@ sap.ui.define([
 	"sap/m/MessageBox",
 	"sap/m/MessageToast",
 	"sap/ui/core/EventBus",
-	"sap/ui/model/json/JSONModel"
-], (BaseController, MessageBox, MessageToast, EventBus, JSONModel) => {
+	"sap/ui/model/json/JSONModel",
+	"../util/Install"
+], (BaseController, MessageBox, MessageToast, EventBus, JSONModel, Install) => {
 	"use strict";
 
 	return BaseController.extend("com.sapaicopilot.app.controller.App", {
@@ -24,6 +25,13 @@ sap.ui.define([
 
 		onCloseSidebar() {
 			this.getModel("app").setProperty("/sidebarOpen", false);
+		},
+
+		/** Browser's install dialog: the app gets its own window and an icon on the desktop or home screen. */
+		async onInstallApp() {
+			if (await Install.install()) {
+				MessageToast.show(this.getText("installAppDone"));
+			}
 		},
 
 		onNewChat() {

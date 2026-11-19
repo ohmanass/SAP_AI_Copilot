@@ -92,6 +92,14 @@
 						</List>
 					</ScrollContainer>
 
+					<Button
+						text="{i18n>installApp}"
+						tooltip="{i18n>installAppTooltip}"
+						icon="sap-icon://sys-add"
+						type="Transparent"
+						class="cpInstallBtn"
+						visible="{= !!${app>/canInstall} }"
+						press=".onInstallApp"/>
 					<HBox class="cpProfile" alignItems="Center" renderType="Bare">
 						<Avatar initials="{= ${app>/user} ? ${app>/user/initials} : 'LU' }" displaySize="XS" backgroundColor="Accent6" class="cpProfileAvatar"/>
 						<VBox class="cpProfileText" renderType="Bare">

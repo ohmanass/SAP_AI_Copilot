@@ -11,12 +11,16 @@ On SAP BTP the backend is deployed without the frontend: the Application Router
 serves the interface and handles the SAP login, so nothing is mounted.
 """
 
+import mimetypes
 import os
 from pathlib import Path
 
 from starlette.staticfiles import StaticFiles
 
 FRONTEND = Path(__file__).resolve().parents[1] / "frontend" / "webapp"
+
+# Web app manifest of the installable app (unknown to some systems' MIME tables)
+mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 
 class FreshStaticFiles(StaticFiles):
