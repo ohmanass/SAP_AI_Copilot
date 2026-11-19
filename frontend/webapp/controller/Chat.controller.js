@@ -777,7 +777,11 @@ sap.ui.define([
 
 		/** A row of a list table asks the assistant for that document's details. */
 		onDataRowPress(event, action, key) {
-			const value = event.getSource().getBindingContext("chat").getProperty(key);
+			this.askForDocument(action, event.getSource().getBindingContext("chat").getProperty(key));
+		},
+
+		/** A row or a chart bar asks the assistant for one document ("Analyse purchase order …"). */
+		askForDocument(action, value) {
 			if (value && !this._chat().getProperty("/busy")) {
 				this._send(this.getText(`dataRowPrompt.${action}`, [value]));
 			}

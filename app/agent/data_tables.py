@@ -19,12 +19,15 @@ Table:
         "row_action": str | None           "purchase_order", "sales_order", "supplier_invoice" or
                                            "three_way_match": what a row press asks for
         "row_key": str | None              row field holding the document number
+        "chart": dict | None               chart of the rows (app.agent.charts), when it tells something
     }
 
 Column types: id, text, date, number, quantity, amount, status, days, block (payment block code).
 Columns absent from every row are dropped: the demo dataset and SAP S/4HANA
 do not return the same fields.
 """
+
+from app.agent.charts import build_chart
 
 MAX_ROWS = 50
 
@@ -292,6 +295,7 @@ def build_table(tool_name, result):
     table = builder(result)
     if not table["rows"] and not table["attributes"]:
         return None
+    table["chart"] = build_chart(table)
     return table
 
 

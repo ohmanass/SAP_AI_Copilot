@@ -16,9 +16,11 @@ sap.ui.define([
 	"sap/ui/core/ResizeHandler",
 	"sap/ui/core/format/DateFormat",
 	"sap/ui/core/format/NumberFormat",
-	"./DataTableExport"
+	"sap/ui/core/HTML",
+	"./DataTableExport",
+	"./DataChart"
 ], (VBox, HBox, FlexBox, Title, Text, Label, Table, Column, ColumnListItem, ObjectNumber, ObjectStatus,
-	Button, MessageToast, Log, ResizeHandler, DateFormat, NumberFormat, DataTableExport) => {
+	Button, MessageToast, Log, ResizeHandler, DateFormat, NumberFormat, HTML, DataTableExport, DataChart) => {
 	"use strict";
 
 	/**
@@ -113,11 +115,42 @@ sap.ui.define([
 					return statusText(value);
 				case "block":
 					return blockText(value);
+				case "days":
+					return isEmpty(value) ? "" : text("dataDays", [formatNumber(value, "number")]);
 				default:
 					return isEmpty(value) ? "" : String(value);
 			}
 		};
 		return { text, optionalText, label, statusText, blockText, title, valueText };
+	}
+
+	/** The chart as an HTML control; a bar of an actionable table asks for its document. */
+	function chartControl(controller, table, texts) {
+		const chart = table.chart;
+		const actionText = chart.action ? texts.text(`dataRowAction.${chart.action}`) : "";
+		const html = new HTML({ content: DataChart.render(chart, texts, actionText), sanitizeContent: false });
+		if (chart.action) {
+			const ask = (event) => {
+				const bar = event.target.closest && event.target.closest(".cpChartRow[data-key]");
+				if (bar) {
+					controller.askForDocument(chart.action, bar.getAttribute("data-key"));
+				}
+			};
+			html.attachAfterRendering(() => {
+				const dom = html.getDomRef();
+				if (dom && !dom._cpChartEvents) {
+					dom._cpChartEvents = true;
+					dom.addEventListener("click", ask);
+					dom.addEventListener("keydown", (event) => {
+						if (event.key === "Enter" || event.key === " ") {
+							event.preventDefault();
+							ask(event);
+						}
+					});
+				}
+			});
+		}
+		return html;
 	}
 
 	return {
@@ -266,6 +299,11 @@ sap.ui.define([
 						}
 					}
 				}).addStyleClass("cpDataAttributes"));
+			}
+
+			// ---------- Chart of the rows (built by the backend, app/agent/charts.py) ----------
+			if (table.chart) {
+				container.addItem(chartControl(controller, table, { text, label, value: valueText }));
 			}
 
 			// ---------- Rows ----------
