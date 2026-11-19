@@ -21,6 +21,7 @@ from app.attachments import reader as attachment_reader
 from app.attachments import sensitive as attachment_sensitive
 from app.i18n import languages as ui_languages
 from app.i18n import translator as ui_translator
+from app.llm import usage
 from app.modules import MODULES, get_module
 from app.rag import knowledge_store
 from app.storage import chat_store, feedback_store
@@ -164,6 +165,23 @@ def module_key(agent):
     return agent.module.key if agent.module else None
 
 
+def check_quota(user):
+    """
+    Before a request that calls the model: 429 when the user's daily AI quota is
+    used up; then the calls of the request count for this user.
+    """
+    try:
+        status = usage.quota_status(user)
+    except chat_store.StoreUnavailable:
+        status = {"exceeded": False}       # cannot be checked: never block the user for that
+    if status["exceeded"]:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Daily AI quota reached ({status['limit']} tokens). It resets at {status['resets']}."
+        )
+    usage.attribute(user)
+
+
 def plan_title(session_id, owner):
     """
     After a saved exchange: the title to write (first exchange) or to review
@@ -224,6 +242,7 @@ def health():
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(request: ChatRequest, user: str = Depends(current_user)):
 
+    check_quota(user)
     session_id = request.session_id or str(uuid4())
     agent, lock = get_session(session_id, user, request.module)
 
@@ -280,6 +299,7 @@ def chat_stream(request: ChatRequest, user: str = Depends(current_user)):
       error        {"type", "message"}
     """
 
+    check_quota(user)
     session_id = request.session_id or str(uuid4())
     agent, lock = get_session(session_id, user, request.module)
     attachments = message_attachments(session_id, user, request)
@@ -326,6 +346,7 @@ def chat_stream(request: ChatRequest, user: str = Depends(current_user)):
         # After the answer, outside the conversation lock: the answer is already on screen
         if answer is None:
             return
+        usage.attribute(user)       # titles and follow-ups count for the user (new context per step)
         followups_future = start_followups(agent, request, answer[0], answer[2])
         planned_title = plan_title(session_id, user) if saved else None
         title = save_title(planned_title, session_id, user)
@@ -387,6 +408,7 @@ def automatic_title(session_id: str, user: str = Depends(current_user)):
     exchanges = chat_store.recent_exchanges(session_id, user, titles.EXCHANGES_SHOWN)
     if not exchanges:
         raise HTTPException(status_code=404, detail=NOT_FOUND)
+    check_quota(user)
     title = titles.generate(exchanges)
     if not title:
         raise HTTPException(status_code=503, detail="The title could not be written. Try again later.")
@@ -467,6 +489,7 @@ def add_knowledge_document(file: UploadFile = File(...), module: str = Form(""),
     name = _clean_filename(file.filename)
     data = file.file.read(attachment_extract.MAX_FILE_BYTES + 1)
     try:
+        check_quota(user)
         text, _, _ = attachment_extract.extract_text(name, data)
     except attachment_extract.ExtractionError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
@@ -540,8 +563,13 @@ def dashboard(refresh: bool = False, user: str = Depends(current_user)):
 @app.get("/api/usage")
 def ai_usage(days: int = 30, user: str = Depends(current_user)):
     """Calls and tokens sent to SAP Generative AI Hub (counters only, every user)."""
-    from app.llm import usage
     return usage.report(days)
+
+
+@app.get("/api/usage/me")
+def my_ai_quota(user: str = Depends(current_user)):
+    """The user's tokens today against the daily quota (AI_DAILY_TOKEN_QUOTA)."""
+    return usage.quota_status(user)
 
 
 @app.get("/api/status")
@@ -590,6 +618,7 @@ def upload_attachment(session_id: str, file: UploadFile = File(...), user: str =
     data = file.file.read(attachment_extract.MAX_FILE_BYTES + 1)
 
     try:
+        check_quota(user)
         text, pages, truncated = attachment_extract.extract_text(name, data)
     except attachment_extract.ExtractionError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error

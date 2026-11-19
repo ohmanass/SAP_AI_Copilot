@@ -83,6 +83,11 @@ sap.ui.define([
 			return this._request("dashboard", { timeoutMs: 60000 });
 		},
 
+		/** The user's AI tokens today against the daily quota. */
+		getQuota() {
+			return this._request("usage/me");
+		},
+
 		/** Calls and tokens sent to SAP Generative AI Hub over the last `days` days. */
 		getUsage(days) {
 			return this._request(`usage?days=${encodeURIComponent(days || 30)}`);

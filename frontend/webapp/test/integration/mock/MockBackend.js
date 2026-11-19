@@ -77,6 +77,7 @@ sap.ui.define([], () => {
 			by_model: [{ model: "gpt-4o-mini", calls: 5, prompt_tokens: 6553, completion_tokens: 253, cost: null, total_tokens: 6806 }],
 			by_day: [{ day: "2026-11-19", calls: 5, prompt_tokens: 6553, completion_tokens: 253, cost: null, total_tokens: 6806 }]
 		},
+		"GET usage/me": { limit: 250000, used: 6806, calls: 5, remaining: 243194, exceeded: false, resets: "00:00 UTC" },
 		"GET i18n/languages": { source: "en", reviewed: ["en", "fr", "de", "es"], machine: ["it", "ja"] },
 		"GET knowledge-base": {
 			documents: [{

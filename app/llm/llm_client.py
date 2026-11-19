@@ -8,7 +8,9 @@ load_dotenv()
 
 class LLMClient:
 
-    def __init__(self):
+    def __init__(self, owner=None):
+        # User the calls are counted for (AI usage and daily quota)
+        self.owner = owner
         self.model = os.getenv(
             "GENAI_MODEL_NAME",
             "gpt-4o-mini"
@@ -39,4 +41,4 @@ class LLMClient:
             parameters["stream"] = True
 
         # Counted in the AI usage (app.llm.usage)
-        return usage.chat_completion(feature, **parameters)
+        return usage.chat_completion(feature, owner=self.owner, **parameters)

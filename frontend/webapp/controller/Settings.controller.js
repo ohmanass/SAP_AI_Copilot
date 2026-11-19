@@ -160,13 +160,24 @@ sap.ui.define([
 			model.setProperty("/busy", true);
 			model.setProperty("/error", "");
 			try {
-				model.setProperty("/data", await this.getService().getUsage(Number(model.getProperty("/days"))));
+				const [data, quota] = await Promise.all([
+					this.getService().getUsage(Number(model.getProperty("/days"))),
+					this.getService().getQuota().catch(() => null)
+				]);
+				model.setProperty("/data", data);
+				model.setProperty("/quota", quota);
 			} catch (error) {
 				model.setProperty("/data", null);
 				model.setProperty("/error", `${this.getText("usageLoadError")} ${this.describeError(error)}`);
 			} finally {
 				model.setProperty("/busy", false);
 			}
+		},
+
+		formatQuota(used, limit) {
+			const number = new Intl.NumberFormat(Language.locale());
+			return limit ? this.getText("quotaValue", [number.format(used || 0), number.format(limit)])
+				: this.getText("quotaUnlimited", [number.format(used || 0)]);
 		},
 
 		formatFeature(feature) {

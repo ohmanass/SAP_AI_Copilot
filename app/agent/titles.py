@@ -21,6 +21,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from app.attachments import sensitive
+from app.llm import usage
 
 logger = logging.getLogger("sap_ai_copilot.titles")
 
@@ -53,7 +54,6 @@ _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="title")
 
 
 def _ask_model(content: str) -> str:
-    from app.llm import usage
 
     response = usage.chat_completion(
         "title",
@@ -108,7 +108,7 @@ def generate(exchanges, current_title=None):
 
 def start(exchanges, current_title=None):
     """Generate the title in the background (after the answer, with the follow-ups): a Future."""
-    return _executor.submit(generate, list(exchanges), current_title)
+    return usage.submit(_executor, generate, list(exchanges), current_title)
 
 
 def result(future):

@@ -74,6 +74,21 @@
 				</HBox>
 				<Text text="{usage>/error}" class="cpCardNote" visible="{= !!${usage>/error} }"/>
 
+				<!-- The user's daily quota -->
+				<VBox class="cpQuota" renderType="Bare" visible="{= !!${usage>/quota} }">
+					<HBox class="cpQuotaHead" justifyContent="SpaceBetween" alignItems="Center" renderType="Bare">
+						<Text text="{i18n>quotaTitle}" class="cpUsageFeature"/>
+						<Text text="{parts: ['usage>/quota/used', 'usage>/quota/limit'], formatter: '.formatQuota'}" class="cpCardNote"/>
+					</HBox>
+					<ProgressIndicator
+						visible="{= !!${usage>/quota/limit} }"
+						percentValue="{= ${usage>/quota/limit} ? Math.min(100, 100 * ${usage>/quota/used} / ${usage>/quota/limit}) : 0 }"
+						displayValue=" "
+						state="{= ${usage>/quota/exceeded} ? 'Error' : (${usage>/quota/used} > 0.8 * ${usage>/quota/limit} ? 'Critical' : 'Information') }"
+						class="cpQuotaBar"/>
+					<Text text="{i18n>quotaNote}" class="cpCardNote"/>
+				</VBox>
+
 				<FlexBox class="cpUsageKpis" wrap="Wrap" renderType="Bare">
 					<VBox class="cpUsageKpi" renderType="Bare">
 						<Text text="{i18n>usageCalls}" class="cpKpiLabel"/>

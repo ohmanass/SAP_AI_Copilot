@@ -16,6 +16,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 
 from app.attachments import sensitive
+from app.llm import usage
 
 logger = logging.getLogger("sap_ai_copilot.followups")
 
@@ -64,7 +65,6 @@ def capabilities(tools) -> str:
 
 
 def _ask_model(content: str) -> str:
-    from app.llm import usage
 
     response = usage.chat_completion(
         "suggestions",
@@ -155,7 +155,7 @@ def generate(question: str, answer: str, tools, workspace: str = "", tables=None
 
 
 def start(question: str, answer: str, tools, workspace: str = "", tables=None):
-    return _executor.submit(generate, question, answer, list(tools), workspace, tables)
+    return usage.submit(_executor, generate, question, answer, list(tools), workspace, tables)
 
 
 def result(future):

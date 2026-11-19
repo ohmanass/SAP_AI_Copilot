@@ -24,6 +24,20 @@ sap.ui.define([
 					});
 				},
 
+				iSeeMyQuota(text) {
+					return this.waitFor({
+						controlType: "sap.m.ProgressIndicator", viewName: "Settings",
+						check: (bars) => bars.some((bar) => Math.abs(bar.getPercentValue() - 2.72) < 0.01),
+						success: () => this.waitFor({
+							controlType: "sap.m.Text", viewName: "Settings",
+							check: (texts) => texts.some((t) => t.getText() === text),
+							success: () => Opa5.assert.ok(true, `quota: ${text}`),
+							errorMessage: `Quota text "${text}" not shown`
+						}),
+						errorMessage: "No quota gauge"
+					});
+				},
+
 				iSeeTheAiUsage(calls) {
 					return this.waitFor({
 						controlType: "sap.m.Text", viewName: "Settings", matchers: withClass("cpKpiValue"),

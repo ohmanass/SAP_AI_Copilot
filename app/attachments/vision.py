@@ -111,7 +111,10 @@ def transcribe(images):
 
     try:
         with ThreadPoolExecutor(max_workers=min(PARALLEL_CALLS, len(todo))) as pool:
-            results = iter(list(pool.map(_ask_model, todo)))
+            # Each image is counted for the user who attached it (usage.submit keeps the request's user)
+            from app.llm import usage
+            futures = [usage.submit(pool, _ask_model, url) for url in todo]
+            results = iter([future.result() for future in futures])
     except Exception as error:
         logger.exception("Image transcription failed")
         raise VisionError("The AI model could not read the image. Please try again later.") from error

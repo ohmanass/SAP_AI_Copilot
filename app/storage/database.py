@@ -138,6 +138,15 @@ CREATE TABLE IF NOT EXISTS ai_usage (
     PRIMARY KEY (usage_day, feature, model)
 );
 
+-- AI usage per user and day: the daily quota (AI_DAILY_TOKEN_QUOTA, app/llm/usage.py)
+CREATE TABLE IF NOT EXISTS ai_usage_user (
+    usage_day TEXT NOT NULL,
+    owner TEXT NOT NULL,
+    calls INTEGER NOT NULL,
+    total_tokens INTEGER NOT NULL,
+    PRIMARY KEY (usage_day, owner)
+);
+
 -- Interface translated by the AI model (app/i18n/translator.py): one row per
 -- language and text; translated is NULL when the translation failed the checks
 CREATE TABLE IF NOT EXISTS ui_translations (
@@ -248,6 +257,14 @@ HANA_TABLES = {
             prompt_tokens BIGINT NOT NULL,
             completion_tokens BIGINT NOT NULL,
             PRIMARY KEY (usage_day, feature, model)
+        )""",
+    "AI_USAGE_USER": """
+        CREATE COLUMN TABLE ai_usage_user (
+            usage_day NVARCHAR(10) NOT NULL,
+            owner NVARCHAR(256) NOT NULL,
+            calls BIGINT NOT NULL,
+            total_tokens BIGINT NOT NULL,
+            PRIMARY KEY (usage_day, owner)
         )""",
     "UI_TRANSLATIONS": """
         CREATE COLUMN TABLE ui_translations (

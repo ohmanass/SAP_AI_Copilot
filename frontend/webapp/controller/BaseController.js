@@ -35,6 +35,10 @@ sap.ui.define([
 				case "timeout":
 					return this.getText("errorTimeout");
 				case "http":
+					// Daily AI quota used up (app/llm/usage.py): a message, not a server error
+					if (error.status === 429) {
+						return this.getText("quotaExceeded");
+					}
 					return this.getText("errorServer", [error.status, error.detail || ""]).trim();
 				case "session":
 					return this.getText("errorSession");

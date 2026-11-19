@@ -11,7 +11,8 @@ sap.ui.define([
 		Given.iStartMyApp("settings");
 		Then.onTheKnowledgeBase.iSeeTheNavigation("settings");
 		Then.onTheSettings.iSeeTheLanguageChoice()
-			.and.iSeeTheAiUsage("5");
+			.and.iSeeTheAiUsage("5")
+			.and.iSeeMyQuota("6,806 of 250,000 tokens");
 		Then.iTeardownMyApp();
 	});
 

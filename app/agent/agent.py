@@ -334,7 +334,7 @@ class SAPAgent:
 
     def __init__(self, module=None, session_id=None, owner=None):
 
-        self.llm = LLMClient()
+        self.llm = LLMClient(owner)
 
         # Conversation and user the agent belongs to: scope the attached documents it can read
         self.session_id = session_id
