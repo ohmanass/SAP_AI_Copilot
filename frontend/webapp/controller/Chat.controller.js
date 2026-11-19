@@ -9,10 +9,11 @@ sap.ui.define([
 	"../util/KnowledgeDialog",
 	"../util/ConversationExport",
 	"../util/Language",
+	"../util/Dictation",
 	"sap/m/Menu",
 	"sap/m/MenuItem"
 ], (BaseController, JSONModel, EventBus, MessageToast, MessageBox, Markdown, DataTable, KnowledgeDialog,
-	ConversationExport, Language, Menu, MenuItem) => {
+	ConversationExport, Language, Dictation, Menu, MenuItem) => {
 	"use strict";
 
 	const TOOL_ICONS = {
@@ -82,6 +83,9 @@ sap.ui.define([
 				busy: false,
 				// Live SAP indicators of the welcome screen
 				dashboard: [],
+				// Dictation (util/Dictation.js)
+				dictationSupported: Dictation.isSupported(),
+				dictating: false,
 				pending: false,
 				activity: "",
 				loading: false,
@@ -121,6 +125,7 @@ sap.ui.define([
 		},
 
 		onExit() {
+			this._stopDictation();
 			EventBus.getInstance().unsubscribe("copilot", "newChat", this._onNewChatEvent, this);
 			EventBus.getInstance().unsubscribe("copilot", "conversationRenamed", this._onConversationRenamed, this);
 		},
@@ -332,6 +337,7 @@ sap.ui.define([
 		 */
 		async _send(text, attachmentsOverride) {
 			const chat = this._chat();
+			this._stopDictation();
 
 			if (!text || chat.getProperty("/busy") || chat.getProperty("/loading") || chat.getProperty("/uploading")) {
 				return;
@@ -584,9 +590,52 @@ sap.ui.define([
 		},
 
 		_onInputKeyDown(event) {
+			if (event.key === "Escape" && this._chat().getProperty("/dictating")) {
+				this._stopDictation();
+				return;
+			}
 			if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
 				event.preventDefault();
 				this.onSend();
+			}
+		},
+
+		/* ======================= Dictation ======================= */
+
+		/** Microphone button: starts or stops the dictation into the message field. */
+		onDictate() {
+			if (!this._dictation) {
+				this._dictation = Dictation.create({
+					language: () => Language.locale(),
+					onText: (finalText, interim) => this._showDictatedText(finalText, interim),
+					onState: (listening) => {
+						this._chat().setProperty("/dictating", listening);
+						if (!listening) {
+							this._focusInput();
+						}
+					},
+					onError: (code) => MessageToast.show(this.getText(
+						{ "not-allowed": "dictationDenied", "service-not-allowed": "dictationDenied",
+							"audio-capture": "dictationNoMicrophone", "no-speech": "dictationNoSpeech" }[code]
+							|| "dictationUnavailable", [code]))
+				});
+			}
+			if (!this._dictation.isListening()) {
+				// The dictated text goes after what is already typed
+				const draft = (this._chat().getProperty("/draft") || "").trimEnd();
+				this._dictationBase = draft ? `${draft} ` : "";
+			}
+			this._dictation.toggle();
+		},
+
+		_showDictatedText(finalText, interim) {
+			const text = `${finalText}${interim}`.replace(/\s+/g, " ").trimStart();
+			this._chat().setProperty("/draft", (this._dictationBase || "") + text);
+		},
+
+		_stopDictation() {
+			if (this._dictation && this._dictation.isListening()) {
+				this._dictation.stop();
 			}
 		},
 

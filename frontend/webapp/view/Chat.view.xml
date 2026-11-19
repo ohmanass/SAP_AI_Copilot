@@ -301,12 +301,26 @@
 							class="cpInput"
 							value="{chat>/draft}"
 							valueLiveUpdate="true"
-							placeholder="{i18n>inputPlaceholder}"
+							placeholder="{= ${chat>/dictating} ? ${i18n>dictationListening} : ${i18n>inputPlaceholder} }"
 							rows="1"
 							growing="true"
 							growingMaxLines="8"
 							width="100%"
 							maxLength="8000"/>
+						<!-- Dictation (util/Dictation.js): only where the browser supports it -->
+						<Button
+							id="dictateButton"
+							icon="sap-icon://microphone"
+							type="Transparent"
+							class="cpDictateBtn"
+							tooltip="{= ${chat>/dictating} ? ${i18n>dictateStop} : ${i18n>dictate} }"
+							visible="{chat>/dictationSupported}"
+							enabled="{= !${chat>/loading} }"
+							press=".onDictate">
+							<customData>
+								<core:CustomData key="listening" value="{= ${chat>/dictating} ? 'true' : 'false' }" writeToDom="true"/>
+							</customData>
+						</Button>
 						<Button
 							id="sendButton"
 							icon="{= ${chat>/busy} ? 'sap-icon://stop' : 'sap-icon://paper-plane' }"

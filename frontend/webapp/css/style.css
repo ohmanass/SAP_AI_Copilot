@@ -2576,3 +2576,50 @@ html, body.cpBody {
 	font-size: 0.75rem;
 	color: var(--cp-muted);
 }
+
+/* Dictation: microphone of the composer, pulsing while listening */
+.cpDictateBtn.sapMBtn {
+	flex: none;
+	align-self: flex-end;
+}
+
+.cpDictateBtn .sapMBtnInner {
+	width: 2.5rem;
+	height: 2.5rem;
+	border: none;
+	border-radius: 12px;
+	background: transparent;
+}
+
+.cpDictateBtn .sapMBtnInner:hover {
+	background: var(--cp-surface-2);
+}
+
+.cpDictateBtn .sapMBtnIcon {
+	font-size: 1.125rem;
+	color: var(--cp-text-2);
+}
+
+/* Over the theme's transparent button: higher specificity than .sapMBtnTransparent */
+.cpComposer .cpDictateBtn[data-listening="true"] .sapMBtnInner.sapMBtnTransparent,
+.cpComposer .cpDictateBtn[data-listening="true"] .sapMBtnInner.sapMBtnTransparent:hover {
+	background: rgba(248, 113, 113, 0.16);
+	animation: cpListening 1.4s ease-in-out infinite;
+}
+
+/* Stronger than the theme's hover and focus colours of a transparent button icon */
+.cpComposer .cpDictateBtn.sapMBtnBase[data-listening="true"] > .sapMBtnInner.sapMBtnHoverable.sapMBtnTransparent > .sapMBtnIcon.sapUiIcon,
+.cpComposer .cpDictateBtn.sapMBtnBase[data-listening="true"]:hover > .sapMBtnInner.sapMBtnHoverable.sapMBtnTransparent > .sapMBtnIcon.sapUiIcon {
+	color: #f87171;
+}
+
+@keyframes cpListening {
+	0%, 100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.45); }
+	50% { box-shadow: 0 0 0 0.375rem rgba(248, 113, 113, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.cpComposer .cpDictateBtn[data-listening="true"] .sapMBtnInner.sapMBtnTransparent {
+		animation: none;
+	}
+}
