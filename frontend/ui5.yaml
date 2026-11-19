@@ -12,3 +12,8 @@ framework:
     - name: sap.ui.layout
     - name: sap.ui.export
     - name: themelib_sap_horizon
+builder:
+  resources:
+    excludes:
+      # Frontend tests: run by pytest (tests/test_frontend.py), never deployed
+      - "/test/**"

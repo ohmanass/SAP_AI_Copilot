@@ -13,7 +13,8 @@ sap.ui.define([], () => {
 	 * reads the text and sends it.
 	 */
 
-	const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+	/** The browser's recognition class, looked up when used (standard name first, then Chrome's prefixed one). */
+	const recognitionClass = () => window.SpeechRecognition || window.webkitSpeechRecognition;
 
 	// Errors that end the dictation without anything to tell the user
 	const SILENT_ERRORS = new Set(["aborted"]);
@@ -36,6 +37,7 @@ sap.ui.define([], () => {
 		};
 
 		const start = () => {
+			const Recognition = recognitionClass();
 			if (!Recognition || recognition) {
 				return;
 			}
@@ -94,7 +96,7 @@ sap.ui.define([], () => {
 
 	return {
 		/** Dictation is possible in this browser (API present, secure page for the microphone). */
-		isSupported: () => !!Recognition && window.isSecureContext,
+		isSupported: () => !!recognitionClass() && window.isSecureContext,
 		create
 	};
 });

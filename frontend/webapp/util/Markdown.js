@@ -93,10 +93,7 @@ sap.ui.define([], () => {
 			stack.push(last);
 		});
 
-		const render = (items) => {
-			if (!items.length) {
-				return "";
-			}
+		const renderItems = (items) => {
 			const ordered = items[0].ordered;
 			const tag = ordered ? "ol" : "ul";
 			const start = ordered && items[0].start > 1 ? ` start="${items[0].start}"` : "";
@@ -104,6 +101,21 @@ sap.ui.define([], () => {
 				`<li>${item.text.split("\n").map(renderInline).join("<br>")}${render(item.children)}</li>`
 			).join("");
 			return `<${tag}${start}>${content}</${tag}>`;
+		};
+
+		// Consecutive items of the same kind form one list: a bulleted list followed by a
+		// numbered one are two lists, not one
+		const render = (items) => {
+			const groups = [];
+			items.forEach((item) => {
+				const last = groups[groups.length - 1];
+				if (last && last[0].ordered === item.ordered) {
+					last.push(item);
+				} else {
+					groups.push([item]);
+				}
+			});
+			return groups.map(renderItems).join("");
 		};
 
 		return render(root.children);
