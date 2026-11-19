@@ -1,24 +1,8 @@
-
 from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DOCUMENTS_PATH = PROJECT_ROOT / "data" / "documents"
-
-
-def load_documents():
-    documents = []
-
-    for file_path in DOCUMENTS_PATH.glob("*.txt"):
-        content = file_path.read_text(encoding="utf-8")
-
-        documents.append({
-            "source": file_path.name,
-            "content": content
-        })
-
-    return documents
-
 
 
 def split_text(text, chunk_size=800, overlap=150):
@@ -64,22 +48,3 @@ def split_text(text, chunk_size=800, overlap=150):
         chunks.append(current_chunk)
 
     return chunks
-
-
-
-def load_and_split_documents():
-    documents = load_documents()
-    processed_documents = []
-
-    for document in documents:
-        chunks = split_text(document["content"])
-
-        for index, chunk in enumerate(chunks):
-            processed_documents.append({
-                "id": f'{document["source"]}_{index}',
-                "source": document["source"],
-                "chunk_index": index,
-                "content": chunk
-            })
-
-    return processed_documents

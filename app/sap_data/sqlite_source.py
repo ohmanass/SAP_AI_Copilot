@@ -1,13 +1,55 @@
 """
-Offline demo data source: the local SQLite database with fictitious SAP MM data.
-Reuses the existing tool functions so their behaviour stays unchanged.
+Offline demo data source: the local SQLite database with fictitious SAP MM data
+(app/database/seed.py), used when SAP_DATA_SOURCE=sqlite.
 """
 
+from datetime import date
+
 from app.database.connection import DB_PATH, get_connection
-from app.tools.delivery_analysis import get_overdue_orders as sqlite_overdue_orders
-from app.tools.purchase_orders import get_purchase_order as sqlite_purchase_order
 
 MAX_LIMIT = 50
+
+
+def sqlite_purchase_order(po_number: str):
+    connection = get_connection()
+    try:
+        order = connection.execute(
+            """
+            SELECT po.po_number, po.order_date, po.delivery_date, po.status,
+                   s.name AS supplier, s.country AS supplier_country
+            FROM purchase_orders po
+            JOIN suppliers s ON po.supplier_id = s.supplier_id
+            WHERE po.po_number = ?
+            """,
+            (po_number,)
+        ).fetchone()
+        if order is None:
+            return {"error": f"Purchase order {po_number} not found"}
+        items = connection.execute(
+            "SELECT material, quantity, unit_price FROM purchase_order_items WHERE po_number = ?",
+            (po_number,)
+        ).fetchall()
+        return dict(order, items=[dict(item) for item in items])
+    finally:
+        connection.close()
+
+
+def sqlite_overdue_orders():
+    connection = get_connection()
+    try:
+        rows = connection.execute(
+            """
+            SELECT po.po_number, s.name AS supplier, po.delivery_date, po.status
+            FROM purchase_orders po
+            JOIN suppliers s ON po.supplier_id = s.supplier_id
+            WHERE po.delivery_date < ? AND po.status != 'RECEIVED'
+            ORDER BY po.delivery_date ASC
+            """,
+            (date.today().isoformat(),)
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        connection.close()
 
 
 class SQLiteDemoSource:

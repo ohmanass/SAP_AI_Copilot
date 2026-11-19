@@ -179,7 +179,6 @@ $DataBuild = Join-Path $BackendBuild "data"
 New-Item -ItemType Directory -Force $DataBuild | Out-Null
 robocopy (Join-Path $Root "data\documents") (Join-Path $DataBuild "documents") /E /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy data failed" }
-if (Test-Path (Join-Path $Root "data\sap.db")) { Copy-Item (Join-Path $Root "data\sap.db") $DataBuild }
 
 # --- Backend: English interface texts, source of the translations by the AI model (app/i18n) ---
 $I18nBuild = Join-Path $BackendBuild "ui_i18n"

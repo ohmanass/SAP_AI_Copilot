@@ -12,7 +12,6 @@ from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 
-from app.database.connection import DB_PATH, get_connection
 from app.rag import knowledge_store
 from app.rag.document_loader import DOCUMENTS_PATH
 from app.sap_data import get_data_source
@@ -229,23 +228,6 @@ def _vector_store_status():
         }
 
 
-def _sap_database_status():
-    if not DB_PATH.exists():
-        return {"available": False, "tables": {}, "error": "DatabaseNotFound"}
-
-    connection = get_connection()
-    try:
-        tables = {
-            table: connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-            for table in ("suppliers", "purchase_orders", "purchase_order_items")
-        }
-        return {"available": True, "tables": tables, "error": None}
-    except Exception as error:
-        return {"available": False, "tables": {}, "error": type(error).__name__}
-    finally:
-        connection.close()
-
-
 def get_system_status(check_ai: bool = False, owner: str = "local"):
 
     configured = all(os.getenv(name) for name in REQUIRED_AI_CORE_VARIABLES)
@@ -270,6 +252,5 @@ def get_system_status(check_ai: bool = False, owner: str = "local"):
         "ai": ai,
         "vector_store": _vector_store_status(),
         "sap_data": get_data_source().status(),
-        "sap_database": _sap_database_status(),
         "chat_history": chat_store.describe(owner)
     }

@@ -1794,16 +1794,6 @@ html, body.cpBody {
 	font-size: 0.78rem;
 }
 
-.cpCodeLine.sapMText {
-	padding: 0.625rem 0.875rem;
-	border: 1px solid var(--cp-border);
-	border-radius: 8px;
-	background: #050a14;
-	font-family: var(--cp-mono);
-	font-size: 0.8125rem;
-	color: var(--cp-cyan-soft);
-}
-
 /* Table */
 .cpTable.sapMList,
 .cpTable .sapMListTbl {

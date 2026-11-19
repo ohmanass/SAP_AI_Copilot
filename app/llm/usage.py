@@ -24,9 +24,6 @@ from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger("sap_ai_copilot.usage")
 
-# Features shown on the usage page (key -> what it is)
-FEATURES = ("chat", "suggestions", "title", "vision", "embedding", "status")
-
 _writer = ThreadPoolExecutor(max_workers=1, thread_name_prefix="usage")
 _pending = []
 _pending_lock = threading.Lock()

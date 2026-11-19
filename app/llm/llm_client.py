@@ -40,9 +40,3 @@ class LLMClient:
 
         # Counted in the AI usage (app.llm.usage)
         return usage.chat_completion(feature, **parameters)
-
-    def generate_response(self, messages):
-
-        response = self.generate_completion(messages)
-
-        return response.choices[0].message.content

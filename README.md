@@ -248,7 +248,6 @@ Facultatif :
 | `start.cmd` | Démarre l'application en local (interface et API sur le port 8000) |
 | `npm run lint` (dans `frontend`) | Analyse du code SAPUI5 (UI5 linter) |
 | `npm run build` (dans `frontend`) | Build de production dans `frontend/dist` (utilisé par `deploy.ps1`) |
-| `python -m app.main` | Version en ligne de commande de l'agent |
 | `python -m pytest` | Tests automatisés du backend (depuis la racine du projet) |
 | `python -m evals.agent_eval` | Évaluation de la qualité de l'agent avec le vrai modèle (voir ci-dessous) |
 
